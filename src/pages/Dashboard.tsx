@@ -769,9 +769,11 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ghost" onClick={() => navigate("/admin")}>
-              Admin
-            </Button>
+            {user?.role === "admin" && (
+              <Button variant="ghost" onClick={() => navigate("/admin")}>
+                Admin
+              </Button>
+            )}
             <Button variant="outline" onClick={signOut}>
               Sign Out
             </Button>
