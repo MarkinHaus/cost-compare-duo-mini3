@@ -1,6 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getCurrentUser } from "./users";
+import { api } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 
 export const create = mutation({
   args: { maxMembers: v.optional(v.number()), currencyCode: v.optional(v.string()) },
@@ -164,5 +166,67 @@ export const getByCode = query({
       .query("rooms")
       .withIndex("by_code", (q) => q.eq("code", args.code))
       .unique();
+  },
+});
+
+export const listMyRooms = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+    // Collect all rooms and filter by membership + ownership
+    const allRooms: Array<Doc<"rooms">> = await ctx.db.query("rooms").collect();
+    const memberRooms = allRooms.filter((r) => r.members.includes(user._id));
+    return memberRooms.filter((r) => r.createdBy === user._id);
+  },
+});
+
+export const listMemberRooms = query({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) return [];
+    // Collect all rooms and filter by membership, excluding rooms owned by the user
+    const allRooms: Array<Doc<"rooms">> = await ctx.db.query("rooms").collect();
+    const memberRooms = allRooms.filter((r) => r.members.includes(user._id));
+    return memberRooms.filter((r) => r.createdBy !== user._id);
+  },
+});
+
+// Add: Allow owners to delete their room and its expenses (uses indexes "by_code" and "by_roomCode")
+export const removeMyRoom = mutation({
+  args: { code: v.string() },
+  handler: async (ctx, { code }) => {
+    // Use helper to avoid circular api types
+    const user = await getCurrentUser(ctx);
+    if (!user) {
+      throw new Error("Unauthorized");
+    }
+
+    const room = await ctx.db
+      .query("rooms")
+      .withIndex("by_code", (q) => q.eq("code", code))
+      .unique();
+
+    if (!room) {
+      throw new Error("Room not found");
+    }
+    if (room.createdBy !== user._id) {
+      throw new Error("Only the room owner can delete this room");
+    }
+
+    // Delete all expenses associated with this room
+    const expenses = await ctx.db
+      .query("expenses")
+      .withIndex("by_room_code", (q) => q.eq("roomCode", room.code))
+      .collect();
+
+    for (const e of expenses) {
+      await ctx.db.delete(e._id);
+    }
+
+    // Delete the room
+    await ctx.db.delete(room._id);
+    return true;
   },
 });

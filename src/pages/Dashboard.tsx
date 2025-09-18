@@ -77,14 +77,46 @@ export default function Dashboard() {
   const deleteExpense = useMutation(api.expenses.deleteExpense);
   const updateExpense = useMutation(api.expenses.updateExpense);
   const userRoom = useQuery(api.rooms.getUserRoom);
-  const expenses = useQuery(api.expenses.getByRoom, 
-    userRoom ? { roomCode: userRoom.code } : "skip"
+
+  // ADD: load my owned rooms and rooms I'm a member of (for premium management panel)
+  const myRooms = useQuery(api.rooms.listMyRooms);
+  const memberRooms = useQuery(api.rooms.listMemberRooms);
+
+  // ADD: selected room state to allow switching rooms in the UI (defaults to backend room)
+  const [selectedRoomCode, setSelectedRoomCode] = useState<string | null>(null);
+
+  // ADD: compute combined rooms and active room
+  const combinedRooms: Array<any> = [
+    ...((myRooms as any) ?? []),
+    ...((memberRooms as any) ?? []),
+  ].filter(Boolean);
+
+  const dedupedRooms = Array.from(
+    new Map(combinedRooms.map((r: any) => [r.code, r])).values()
+  );
+
+  const selectedRoom = selectedRoomCode
+    ? dedupedRooms.find((r: any) => r.code === selectedRoomCode) ?? null
+    : null;
+
+  const activeRoom = selectedRoom ?? userRoom ?? null;
+
+  // Keep selectedRoom in sync if not set yet
+  useEffect(() => {
+    if (!selectedRoomCode && userRoom?.code) {
+      setSelectedRoomCode(userRoom.code);
+    }
+  }, [userRoom, selectedRoomCode]);
+
+  const expenses = useQuery(
+    api.expenses.getByRoom,
+    activeRoom ? { roomCode: activeRoom.code } : "skip"
   );
 
   // Add: load member profiles for labeling when rooms have >2 members
   const memberProfiles = useQuery(
     api.users.getProfilesByIds,
-    userRoom ? { ids: userRoom.members as any } : "skip"
+    activeRoom ? { ids: activeRoom.members as any } : "skip"
   );
 
   const [filters, setFilters] = useState({
@@ -567,7 +599,7 @@ export default function Dashboard() {
   }
 
   // Scoped totals using filtered list and window-aware accumulation
-  const memberIds = (userRoom?.members ?? []) as Array<string>;
+  const memberIds = (activeRoom?.members ?? []) as Array<string>;
   const meId = user?._id as string;
   const scopedTotalsComputed = computeMemberScopedTotals(
     filteredExpenses,
@@ -599,7 +631,7 @@ export default function Dashboard() {
   });
 
   // Build per-user tag data (1..n members) for Bar chart, and combined totals for Pie chart
-  const memberIdOrder: Array<string> = (userRoom?.members ?? []) as Array<string>;
+  const memberIdOrder: Array<string> = (activeRoom?.members ?? []) as Array<string>;
   const memberLabels: Array<string> = memberIdOrder.map((id) => userLabel(id));
   // Dynamic legend/tooltip config for ChartContainer
   const chartConfig: Record<string, { label: string; color: string }> = {};
@@ -749,7 +781,7 @@ export default function Dashboard() {
   };
 
   // Currency symbol from room
-  const currencySymbol = userRoom?.currencySymbol ?? "$";
+  const currencySymbol = activeRoom?.currencySymbol ?? "$";
 
   return (
     <motion.div
@@ -1719,6 +1751,132 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </>
+        )}
+
+        {/* Premium-only Room Management Panel at bottom */}
+        {userBilling?.premium && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>Manage Rooms</CardTitle>
+              <CardDescription>Premium-only room management</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Global actions */}
+              <div className="flex flex-wrap gap-3">
+                <Button onClick={handleCreateRoom}>
+                  Create Room
+                </Button>
+                <Dialog open={showJoinRoom} onOpenChange={setShowJoinRoom}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline">Join Room</Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Join Room</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="joinCode">Room Code</Label>
+                        <Input
+                          id="joinCode"
+                          value={joinCode}
+                          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                          placeholder="Enter 6-character code"
+                          maxLength={6}
+                        />
+                      </div>
+                      <Button onClick={handleJoinRoom} className="w-full">
+                        Join Room
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              {/* Rooms list */}
+              {dedupedRooms.length === 0 ? (
+                <div className="text-sm text-muted-foreground">
+                  You are not in any rooms yet.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {dedupedRooms.map((r: any) => {
+                    const isOwner = r.createdBy === (user?._id as any);
+                    const isActive = r.code === selectedRoomCode;
+                    return (
+                      <div
+                        key={r.code}
+                        className="flex items-center justify-between border rounded-md p-3"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">Room {r.code}</span>
+                            {isActive && (
+                              <Badge variant="default">Active</Badge>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {r.members?.length ?? 0} member{(r.members?.length ?? 0) !== 1 ? "s" : ""} · Max {r.maxMembers} · {r.currencySymbol} ({r.currencyCode})
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant={isActive ? "secondary" : "outline"}
+                            size="sm"
+                            onClick={() => {
+                              setSelectedRoomCode(r.code);
+                              toast.success(`Switched to room ${r.code}`);
+                            }}
+                          >
+                            Switch Room
+                          </Button>
+                          {isOwner && (
+                            <Dialog>
+                              <DialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  Delete
+                                </Button>
+                              </DialogTrigger>
+                              <DialogContent>
+                                <DialogHeader>
+                                  <DialogTitle>Delete room {r.code}?</DialogTitle>
+                                </DialogHeader>
+                                <div className="space-y-4">
+                                  <p className="text-sm text-muted-foreground">
+                                    This will permanently delete the room and all its expenses. Only the room owner can delete their room.
+                                  </p>
+                                  <div className="flex justify-end gap-2">
+                                    <Button variant="outline" onClick={() => {}}>
+                                      Cancel
+                                    </Button>
+                                    <Button
+                                      variant="destructive"
+                                      onClick={async () => {
+                                        try {
+                                          await useMutation(api.rooms.removeMyRoom)({ code: r.code });
+                                          toast.success(`Deleted room ${r.code}`);
+                                          // If we deleted the active room, clear selection
+                                          setSelectedRoomCode((prev) => (prev === r.code ? null : prev));
+                                        } catch (e) {
+                                          toast.error("Failed to delete room");
+                                        }
+                                      }}
+                                    >
+                                      Confirm Delete
+                                    </Button>
+                                  </div>
+                                </div>
+                              </DialogContent>
+                            </Dialog>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
       </div>
 
