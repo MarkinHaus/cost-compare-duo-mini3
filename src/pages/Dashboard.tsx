@@ -6,7 +6,7 @@ import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
@@ -53,6 +53,70 @@ export default function Dashboard() {
     annualDay: "",
   });
   const [selectedBeneficiaries, setSelectedBeneficiaries] = useState<string[]>([]);
+
+  // Cookie & Legal modals state
+  const [showCookieModal, setShowCookieModal] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
+
+  // Initialize cookie & terms visibility from localStorage
+  useEffect(() => {
+    try {
+      const cookieAccepted = localStorage.getItem("cookieConsentAccepted");
+      const termsAccepted = localStorage.getItem("termsPrivacyAccepted");
+
+      // Show cookie modal only if acceptance state is missing
+      if (cookieAccepted === null) setShowCookieModal(true);
+      // Show terms modal only if acceptance state is missing
+      if (termsAccepted === null) setShowTermsModal(true);
+    } catch {
+      // If localStorage is blocked, don't break UX
+    }
+  }, []);
+
+  // Cookie consent handlers
+  const handleCookieAcceptAll = () => {
+    try {
+      localStorage.setItem("cookieConsentAccepted", "true");
+      localStorage.setItem("cookieConsentLevel", "all");
+    } catch {}
+    setShowCookieModal(false);
+    toast("Cookie preferences saved: All cookies enabled.");
+  };
+
+  const handleCookieAllowAnalytics = () => {
+    try {
+      localStorage.setItem("cookieConsentAccepted", "true");
+      localStorage.setItem("cookieConsentLevel", "analytics");
+    } catch {}
+    setShowCookieModal(false);
+    toast("Cookie preferences saved: Analytics only.");
+  };
+
+  const handleCookieDecline = () => {
+    try {
+      localStorage.setItem("cookieConsentAccepted", "false");
+      localStorage.setItem("cookieConsentLevel", "none");
+    } catch {}
+    setShowCookieModal(false);
+    toast("Cookie preferences saved: Declined.");
+  };
+
+  // Terms & Privacy handlers
+  const handleTermsAccept = () => {
+    try {
+      localStorage.setItem("termsPrivacyAccepted", "true");
+    } catch {}
+    setShowTermsModal(false);
+    toast("Terms & Privacy accepted.");
+  };
+
+  const handleTermsDecline = () => {
+    try {
+      localStorage.setItem("termsPrivacyAccepted", "false");
+    } catch {}
+    setShowTermsModal(false);
+    toast("You declined the Terms & Privacy.");
+  };
 
   // Form state
   const [expenseForm, setExpenseForm] = useState({
@@ -2016,6 +2080,78 @@ export default function Dashboard() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Cookie Consent Modal */}
+        <Dialog open={showCookieModal} onOpenChange={setShowCookieModal}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Cookie Preferences</DialogTitle>
+              <DialogDescription>
+                We use cookies to enhance your experience. Choose your preference below. You can change this later in your browser settings.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+              <p className="text-foreground">What we use:</p>
+              <ul className="list-disc pl-6">
+                <li>Essential cookies for core functionality</li>
+                <li>Optional analytics to improve the product</li>
+              </ul>
+            </div>
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <Button variant="secondary" onClick={handleCookieDecline}>
+                Decline
+              </Button>
+              <Button variant="outline" onClick={handleCookieAllowAnalytics}>
+                Allow Analytics Only
+              </Button>
+              <Button onClick={handleCookieAcceptAll}>
+                Accept All
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Terms & Privacy Modal */}
+        <Dialog open={showTermsModal} onOpenChange={setShowTermsModal}>
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Terms & Privacy</DialogTitle>
+              <DialogDescription>
+                Please review our Terms of Service and Privacy Policy. By accepting, you agree to the terms outlined.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+              <p>
+                We collect minimal data required to operate collaborative rooms, subscriptions, and security. See details in our policies below.
+              </p>
+              <div className="text-primary underline">
+                {/* Replace with actual hosted documents if available */}
+                <a href="#" onClick={(e) => e.preventDefault()}>View Terms of Service</a> ·{" "}
+                <a href="#" onClick={(e) => e.preventDefault()}>View Privacy Policy</a>
+              </div>
+            </div>
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={handleTermsDecline}>
+                Decline
+              </Button>
+              <Button onClick={handleTermsAccept}>
+                Accept
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Optional enhancement: quick access to Terms & Privacy */}
+        <div className="fixed bottom-4 right-4 z-40 print:hidden">
+          <Button
+            variant="outline"
+            size="sm"
+            className="opacity-80 hover:opacity-100"
+            onClick={() => setShowTermsModal(true)}
+          >
+            Terms & Privacy
+          </Button>
+        </div>
       </div>
 
       {/* Add: Print-only report layout */}
