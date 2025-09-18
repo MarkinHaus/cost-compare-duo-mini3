@@ -1627,6 +1627,13 @@ export default function Dashboard() {
                               ))}
                             </div>
                           )}
+                          {/* New: Recurring start date and scoped total */}
+                          {expense.isRecurring && (
+                            <div className="text-xs text-muted-foreground mt-2">
+                              Starts: {expense.startDate ? new Date(expense.startDate).toLocaleDateString() : "—"} · In scope: {currencySymbol}
+                              {(expense.amount * countOccurrencesInWindow(expense, fromMs, toMs)).toFixed(2)} ({countOccurrencesInWindow(expense, fromMs, toMs)}×)
+                            </div>
+                          )}
                         </div>
                         <div className="flex items-center gap-4">
                           <span className="text-lg font-semibold">{currencySymbol}{expense.amount.toFixed(2)}</span>
@@ -1827,6 +1834,9 @@ export default function Dashboard() {
                     <th className="border-b text-left py-2">Person</th>
                     <th className="border-b text-left py-2">Tags</th>
                     <th className="border-b text-left py-2">Type</th>
+                    {/* New: Start and Scoped total */}
+                    <th className="border-b text-left py-2">Start</th>
+                    <th className="border-b text-right py-2">Scoped total</th>
                     <th className="border-b text-right py-2">Amount</th>
                   </tr>
                 </thead>
@@ -1838,6 +1848,15 @@ export default function Dashboard() {
                       <td className="border-b py-2 pr-2">{(e.tags || []).join(", ") || "—"}</td>
                       <td className="border-b py-2 pr-2">
                         {e.isRecurring ? `recurring (${e.frequency})` : "one-time"}
+                      </td>
+                      {/* New: Start date and Scoped total */}
+                      <td className="border-b py-2 pr-2">
+                        {e.isRecurring && e.startDate ? new Date(e.startDate).toLocaleDateString() : "—"}
+                      </td>
+                      <td className="border-b py-2 pl-2 text-right">
+                        {e.isRecurring
+                          ? `${currencySymbol}${(e.amount * countOccurrencesInWindow(e, fromMs, toMs)).toFixed(2)}`
+                          : "—"}
                       </td>
                       <td className="border-b py-2 pl-2 text-right">
                         {currencySymbol}{e.amount.toFixed(2)}
