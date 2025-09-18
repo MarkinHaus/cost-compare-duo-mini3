@@ -95,4 +95,65 @@ export const currentUserRaw = internalQuery({
   },
 });
 
+export const downgradeToFreeAndPrune = mutation({
+  args: { keepRoomCode: v.string() },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    // Ensure chosen room exists and user is a member, and has <= 3 members
+    const keepRoom = await ctx.db
+      .query("rooms")
+      .withIndex("by_code", (q) => q.eq("code", args.keepRoomCode.toUpperCase()))
+      .unique();
+
+    if (!keepRoom) throw new Error("Selected room not found");
+    if (!keepRoom.members.includes(user._id)) {
+      throw new Error("You are not a member of the selected room");
+    }
+    if (keepRoom.members.length > 3) {
+      throw new Error("Selected room must have 3 or fewer members");
+    }
+
+    // List all rooms user belongs to
+    const myRooms = await ctx.db
+      .query("rooms")
+      .withIndex("by_member", (q) => q.eq("members", user._id as any))
+      .collect();
+
+    // Delete all other rooms owned by user (cannot leave rooms user doesn't own)
+    for (const room of myRooms) {
+      if (room.code === keepRoom.code) continue;
+
+      if (room.createdBy === user._id) {
+        // delete all expenses for this room
+        const expenses = await ctx.db
+          .query("expenses")
+          .withIndex("by_room_code", (q) => q.eq("roomCode", room.code))
+          .collect();
+        for (const e of expenses) {
+          await ctx.db.delete(e._id);
+        }
+        // delete the room
+        await ctx.db.delete(room._id);
+      } else {
+        // Not allowed to leave rooms; surface a clear error
+        throw new Error(
+          `Cannot downgrade: you belong to room ${room.code} you don't own. Leaving rooms is not allowed.`
+        );
+      }
+    }
+
+    // Set user to free
+    await ctx.db.patch(user._id, {
+      premium: false,
+      billingProvider: "trial", // keep provenance
+      plan: undefined,
+      cancelAtPeriodEnd: false,
+    });
+
+    return { ok: true };
+  },
+});
+
 /* moved cancelAtPeriodEnd to a Node action in subscriptions_actions.ts */
