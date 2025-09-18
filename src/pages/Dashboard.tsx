@@ -1637,7 +1637,7 @@ export default function Dashboard() {
                         </div>
                         <div className="flex items-center gap-4">
                           <span className="text-lg font-semibold">{currencySymbol}{expense.amount.toFixed(2)}</span>
-                          {expense.userId === user?._id && (
+                          {(expense.userId === user?._id || userRoom?.createdBy === (user?._id as any)) && (
                             <div className="flex items-center gap-2">
                               <Button
                                 variant="ghost"
@@ -1647,14 +1647,16 @@ export default function Dashboard() {
                               >
                                 <Pencil className="h-4 w-4" />
                               </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteExpense(expense._id)}
-                                title="Delete"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
+                              {expense.userId === user?._id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleDeleteExpense(expense._id)}
+                                  title="Delete"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           )}
                         </div>
