@@ -1834,9 +1834,10 @@ export default function Dashboard() {
                     <th className="border-b text-left py-2">Person</th>
                     <th className="border-b text-left py-2">Tags</th>
                     <th className="border-b text-left py-2">Type</th>
-                    {/* New: Start and Scoped total */}
+                    {/* Add: Start date for recurring */}
                     <th className="border-b text-left py-2">Start</th>
-                    <th className="border-b text-right py-2">Scoped total</th>
+                    {/* Add: In-scope total for recurring */}
+                    <th className="border-b text-right py-2">In-scope</th>
                     <th className="border-b text-right py-2">Amount</th>
                   </tr>
                 </thead>
@@ -1849,13 +1850,14 @@ export default function Dashboard() {
                       <td className="border-b py-2 pr-2">
                         {e.isRecurring ? `recurring (${e.frequency})` : "one-time"}
                       </td>
-                      {/* New: Start date and Scoped total */}
+                      {/* Add: Start date column */}
                       <td className="border-b py-2 pr-2">
                         {e.isRecurring && e.startDate ? new Date(e.startDate).toLocaleDateString() : "—"}
                       </td>
+                      {/* Add: In-scope total column */}
                       <td className="border-b py-2 pl-2 text-right">
                         {e.isRecurring
-                          ? `${currencySymbol}${(e.amount * countOccurrencesInWindow(e, fromMs, toMs)).toFixed(2)}`
+                          ? `${currencySymbol}${(e.amount * countOccurrencesInWindow(e, fromMs, toMs)).toFixed(2)} (${countOccurrencesInWindow(e, fromMs, toMs)}×)`
                           : "—"}
                       </td>
                       <td className="border-b py-2 pl-2 text-right">
