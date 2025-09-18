@@ -30,6 +30,13 @@ const schema = defineSchema(
       isAnonymous: v.optional(v.boolean()), // is the user anonymous. do not remove
 
       role: v.optional(roleValidator), // role of the user. do not remove
+      
+      // Subscription fields
+      premium: v.optional(v.boolean()),
+      plan: v.optional(v.string()),
+      trialEnd: v.optional(v.number()),
+      billingCustomerId: v.optional(v.string()),
+      billingProvider: v.optional(v.string()),
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
     rooms: defineTable({

@@ -16,9 +16,9 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
-import { Id } from "@/convex/_generated/dataModel";
-import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from "recharts";
+import type { Id } from "@/convex/_generated/dataModel";
+import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from "recharts";
 
 export default function Dashboard() {
   const { isLoading, isAuthenticated, user, signOut } = useAuth();
@@ -81,6 +81,10 @@ export default function Dashboard() {
     fromDate: "",
     toDate: "",
   });
+
+  const startTrial = useMutation(api.subscriptions.startTrial);
+  const getCheckoutUrl = useMutation(api.subscriptions.getCheckoutUrl);
+  const userBilling = useQuery(api.subscriptions.getMe);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -219,6 +223,28 @@ export default function Dashboard() {
     if (userRoom) {
       navigator.clipboard.writeText(userRoom.code);
       toast.success("Room code copied to clipboard!");
+    }
+  };
+
+  const handleStartTrial = async () => {
+    try {
+      await startTrial({});
+      toast.success("7-day free trial started!");
+    } catch (error) {
+      toast.error("Failed to start trial");
+    }
+  };
+
+  const handleSubscribe = async () => {
+    try {
+      const url = await getCheckoutUrl({});
+      if (url === "/pay") {
+        toast.info("Subscription coming soon");
+      } else {
+        window.location.href = url;
+      }
+    } catch (error) {
+      toast.error("Failed to get checkout URL");
     }
   };
 
@@ -555,9 +581,14 @@ export default function Dashboard() {
             <h1 className="text-3xl font-bold tracking-tight">Expense Tracker</h1>
             <p className="text-muted-foreground-2 mt-2">Track and compare expenses with your partner</p>
           </div>
-          <Button variant="outline" onClick={signOut}>
-            Sign Out
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" onClick={() => navigate("/admin")}>
+              Admin
+            </Button>
+            <Button variant="outline" onClick={signOut}>
+              Sign Out
+            </Button>
+          </div>
         </div>
 
         {/* Room Management */}
@@ -622,10 +653,41 @@ export default function Dashboard() {
                       <Copy className="h-4 w-4" />
                     </Button>
                   </div>
-                  <div className="text-sm text-muted-foreground">
-                    {userRoom.members.length} member{userRoom.members.length !== 1 ? 's' : ''}
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-muted-foreground">
+                      {userRoom.members.length} member{userRoom.members.length !== 1 ? 's' : ''}
+                    </div>
+                    {userBilling && (
+                      <Badge variant={userBilling.premium ? "default" : "outline"}>
+                        {userBilling.premium ? "Premium" : "Free"}
+                      </Badge>
+                    )}
                   </div>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Subscription Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Subscription</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-4">
+                  {!userBilling?.premium && (
+                    <Button onClick={handleStartTrial} variant="outline">
+                      Start 7-day free trial
+                    </Button>
+                  )}
+                  <Button onClick={handleSubscribe}>
+                    Subscribe $1.20/mo
+                  </Button>
+                </div>
+                {userBilling?.trialActive && (
+                  <p className="text-sm text-muted-foreground">
+                    Trial ends: {new Date(userBilling.trialEnd!).toLocaleDateString()}
+                  </p>
+                )}
               </CardContent>
             </Card>
 
