@@ -17,6 +17,8 @@ import { useNavigate } from "react-router";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
+import { ChartContainer, ChartLegend, ChartLegendContent, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from "recharts";
 
 export default function Dashboard() {
   const { isLoading, isAuthenticated, user, signOut } = useAuth();
@@ -70,6 +72,15 @@ export default function Dashboard() {
   const expenses = useQuery(api.expenses.getByRoom, 
     userRoom ? { roomCode: userRoom.code } : "skip"
   );
+
+  const [filters, setFilters] = useState({
+    name: "",
+    person: "all" as "all" | "you" | "partner",
+    tags: "",
+    type: "all" as "all" | "one-time" | "recurring",
+    fromDate: "",
+    toDate: "",
+  });
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -181,130 +192,209 @@ export default function Dashboard() {
   };
 
   // Helper: count occurrences for recurring expenses up to now (respecting scheduling)
-  function countOccurrences(e: any, nowMs: number): number {
-    if (!e.isRecurring) return 1;
+  function countOccurrencesInWindow(e: any, fromMs: number, toMs: number): number {
+    if (toMs < fromMs) return 0;
+
+    // Non-recurring: include if createdAt is within the window
+    if (!e.isRecurring) {
+      const t = typeof e.createdAt === "number" ? e.createdAt : 0;
+      return t >= fromMs && t <= toMs ? 1 : 0;
+    }
+
+    // Recurring requires a start date
     if (!e.startDate) return 0;
 
-    const start = e.startDate;
-    const end = e.endDate ?? nowMs;
-    const until = Math.min(end, nowMs);
-    if (until < start) return 0;
+    // Bound the search window to the expense lifetime
+    const lifetimeStart = e.startDate;
+    const lifetimeEnd = typeof e.endDate === "number" ? e.endDate : Infinity;
+    const winStart = Math.max(fromMs, lifetimeStart);
+    const winEnd = Math.min(toMs, lifetimeEnd);
+    if (winEnd < winStart) return 0;
 
     const msInDay = 24 * 60 * 60 * 1000;
 
+    // Utility: clamp day to month length
     const clampDay = (d: number, y: number, m: number) => {
-      // clamp day to month length
       const last = new Date(y, m + 1, 0).getDate();
       return Math.max(1, Math.min(d, last));
     };
 
-    // Align first occurrence time for daily with timeOfDayMinutes
+    // Advance helpers
+    const nextDaily = (t: number) => t + msInDay;
+    const nextWeekly = (t: number) => t + 7 * msInDay;
+    const nextMonthly = (t: number, monthlyDay: number) => {
+      const dt = new Date(t);
+      const y = dt.getFullYear();
+      const m = dt.getMonth() + 1;
+      const d = clampDay(monthlyDay, y, m);
+      return new Date(y, m, d, 0, 0, 0, 0).getTime();
+    };
+    const nextAnnual = (t: number, month: number, day: number) => {
+      const dt = new Date(t);
+      const y = dt.getFullYear() + 1;
+      const mm = month - 1;
+      const d = clampDay(day, y, mm);
+      return new Date(y, mm, d, 0, 0, 0, 0).getTime();
+    };
+
+    // Find first occurrence time >= lifetimeStart, aligned by frequency specifics
+    let firstOcc = lifetimeStart;
+
     if (e.frequency === "daily") {
       const minutes = typeof e.timeOfDayMinutes === "number" ? e.timeOfDayMinutes : 0;
-      const startDate = new Date(start);
-      const alignedStart = new Date(
-        startDate.getFullYear(),
-        startDate.getMonth(),
-        startDate.getDate(),
+      const s = new Date(lifetimeStart);
+      const candidate = new Date(
+        s.getFullYear(),
+        s.getMonth(),
+        s.getDate(),
         Math.floor(minutes / 60),
         minutes % 60,
         0,
         0
       ).getTime();
+      firstOcc = candidate < lifetimeStart ? candidate + msInDay : candidate;
 
-      // If alignedStart is before provided start timestamp day boundary, keep it; otherwise first occurrence might be next day
-      const first = alignedStart < start ? alignedStart + msInDay : alignedStart;
-      if (until < first) return 0;
-      const diff = until - first;
-      return Math.floor(diff / msInDay) + 1;
+      // Raise to be >= winStart
+      if (firstOcc < winStart) {
+        const diffDays = Math.ceil((winStart - firstOcc) / msInDay);
+        firstOcc = firstOcc + diffDays * msInDay;
+      }
+
+      if (firstOcc > winEnd) return 0;
+      return Math.floor((winEnd - firstOcc) / msInDay) + 1;
     }
 
     if (e.frequency === "weekly") {
-      // Use the weekday of startDate; first occurrence is start day/time
-      const first = start;
-      if (until < first) return 0;
+      // First weekly occurrence is at start time itself
+      firstOcc = lifetimeStart;
+
+      if (firstOcc < winStart) {
+        const weekMs = 7 * msInDay;
+        const diffWeeks = Math.ceil((winStart - firstOcc) / weekMs);
+        firstOcc = firstOcc + diffWeeks * weekMs;
+      }
+
+      if (firstOcc > winEnd) return 0;
       const weekMs = 7 * msInDay;
-      const diff = until - first;
-      return Math.floor(diff / weekMs) + 1;
+      return Math.floor((winEnd - firstOcc) / weekMs) + 1;
     }
 
     if (e.frequency === "monthly") {
-      const sd = new Date(start);
-      const monthlyDay = typeof e.monthlyDay === "number" ? e.monthlyDay : sd.getDate();
-
-      // First occurrence
-      const firstDay = clampDay(monthlyDay, sd.getFullYear(), sd.getMonth());
-      let first = new Date(sd.getFullYear(), sd.getMonth(), firstDay, 0, 0, 0, 0).getTime();
-      if (first < start) {
-        // Go to next month
-        const nextMonthDate = new Date(sd.getFullYear(), sd.getMonth() + 1, 1);
-        const d = clampDay(monthlyDay, nextMonthDate.getFullYear(), nextMonthDate.getMonth());
-        first = new Date(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), d, 0, 0, 0, 0).getTime();
+      const sd = new Date(lifetimeStart);
+      const mDay = typeof e.monthlyDay === "number" ? e.monthlyDay : sd.getDate();
+      const firstDay = clampDay(mDay, sd.getFullYear(), sd.getMonth());
+      let f = new Date(sd.getFullYear(), sd.getMonth(), firstDay, 0, 0, 0, 0).getTime();
+      if (f < lifetimeStart) {
+        f = nextMonthly(f, mDay);
       }
-      if (until < first) return 0;
 
-      // Count months between first and until inclusive
-      const fu = new Date(first);
-      const uu = new Date(until);
-      const monthsDiff = (uu.getFullYear() - fu.getFullYear()) * 12 + (uu.getMonth() - fu.getMonth());
-      // Check if the occurrence day in the last month has passed
-      const lastOccurDay = clampDay(monthlyDay, uu.getFullYear(), uu.getMonth());
-      const lastOccur = new Date(uu.getFullYear(), uu.getMonth(), lastOccurDay, 0, 0, 0, 0).getTime();
-      const passed = until >= lastOccur ? 1 : 0;
-      return monthsDiff + passed;
+      // Advance until >= winStart
+      while (f < winStart) {
+        // guard against pathological loops
+        f = nextMonthly(f, mDay);
+        if (f > winEnd) break;
+      }
+
+      if (f > winEnd) return 0;
+
+      // Count monthly steps until > winEnd
+      let count = 0;
+      let cur = f;
+      let guard = 0;
+      while (cur <= winEnd && guard < 10000) {
+        count += 1;
+        cur = nextMonthly(cur, mDay);
+        guard += 1;
+      }
+      return count;
     }
 
     if (e.frequency === "annual") {
-      const sd = new Date(start);
-      const month = typeof e.annualMonth === "number" ? e.annualMonth : (sd.getMonth() + 1); // 1..12
-      const day = typeof e.annualDay === "number" ? e.annualDay : sd.getDate(); // 1..31
+      const sd = new Date(lifetimeStart);
+      const month = typeof e.annualMonth === "number" ? e.annualMonth : sd.getMonth() + 1; // 1..12
+      const day = typeof e.annualDay === "number" ? e.annualDay : sd.getDate();
 
-      // First occurrence
-      const firstDay = clampDay(day, sd.getFullYear(), month - 1);
-      let first = new Date(sd.getFullYear(), month - 1, firstDay, 0, 0, 0, 0).getTime();
-      if (first < start) {
-        const nextYear = sd.getFullYear() + 1;
-        const d = clampDay(day, nextYear, month - 1);
-        first = new Date(nextYear, month - 1, d, 0, 0, 0, 0).getTime();
+      let f = new Date(sd.getFullYear(), month - 1, clampDay(day, sd.getFullYear(), month - 1), 0, 0, 0, 0).getTime();
+      if (f < lifetimeStart) {
+        f = nextAnnual(f, month, day);
       }
-      if (until < first) return 0;
 
-      const fu = new Date(first);
-      const uu = new Date(until);
-      let yearsDiff = uu.getFullYear() - fu.getFullYear();
+      while (f < winStart) {
+        f = nextAnnual(f, month, day);
+        if (f > winEnd) break;
+      }
 
-      // Has this year's anniversary passed?
-      const thisYearDay = clampDay(day, uu.getFullYear(), month - 1);
-      const thisAnniv = new Date(uu.getFullYear(), month - 1, thisYearDay, 0, 0, 0, 0).getTime();
-      if (until >= thisAnniv) yearsDiff += 1;
+      if (f > winEnd) return 0;
 
-      return yearsDiff;
+      let count = 0;
+      let cur = f;
+      let guard = 0;
+      while (cur <= winEnd && guard < 10000) {
+        count += 1;
+        cur = nextAnnual(cur, month, day);
+        guard += 1;
+      }
+      return count;
     }
 
-    // Default (non-recognized frequency): count once
-    return 1;
+    // Unrecognized frequency: no count
+    return 0;
   }
 
-  // Compute effective totals with recurrence accumulation
-  const now = Date.now();
-  const myExpenses = expenses?.filter(e => e.userId === user?._id) || [];
-  const partnerExpenses = expenses?.filter(e => e.userId !== user?._id) || [];
+  // Compute date window from filters
+  const fromMs = filters.fromDate ? new Date(filters.fromDate).getTime() : 0;
+  const toMs = filters.toDate ? new Date(filters.toDate).getTime() : Date.now();
 
-  const myTotal = myExpenses.reduce((sum, e) => {
-    const count = countOccurrences(e, now);
+  // Parse tags filter into a set
+  const tagFilterSet = new Set(
+    filters.tags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .map((t) => t.toLowerCase())
+  );
+
+  // Apply filters to expenses
+  const filteredExpenses = (expenses || []).filter((e) => {
+    // name filter
+    if (filters.name && !e.name.toLowerCase().includes(filters.name.toLowerCase())) {
+      return false;
+    }
+    // person filter
+    if (filters.person === "you" && e.userId !== user?._id) return false;
+    if (filters.person === "partner" && e.userId === user?._id) return false;
+    // type filter
+    if (filters.type === "one-time" && e.isRecurring) return false;
+    if (filters.type === "recurring" && !e.isRecurring) return false;
+    // tags filter
+    if (tagFilterSet.size > 0) {
+      const eTags = (e.tags || []).map((t: string) => t.toLowerCase());
+      const hasAny = eTags.some((t: string) => tagFilterSet.has(t));
+      if (!hasAny) return false;
+    }
+    // date window: for recurring use window occurrences, for non-recurring check createdAt within window
+    const count = countOccurrencesInWindow(e, fromMs, toMs);
+    return count > 0;
+  });
+
+  // Scoped totals using filtered list and window-aware accumulation
+  const myExpensesScoped = filteredExpenses.filter((e) => e.userId === user?._id);
+  const partnerExpensesScoped = filteredExpenses.filter((e) => e.userId !== user?._id);
+
+  const myTotalScoped = myExpensesScoped.reduce((sum, e) => {
+    const count = countOccurrencesInWindow(e, fromMs, toMs);
     return sum + e.amount * count;
   }, 0);
 
-  const partnerTotal = partnerExpenses.reduce((sum, e) => {
-    const count = countOccurrences(e, now);
+  const partnerTotalScoped = partnerExpensesScoped.reduce((sum, e) => {
+    const count = countOccurrencesInWindow(e, fromMs, toMs);
     return sum + e.amount * count;
   }, 0);
 
-  const totalExpenses = myTotal + partnerTotal;
-  const difference = Math.abs(myTotal - partnerTotal);
+  const scopedDifference = myTotalScoped - partnerTotalScoped;
 
   // Sort expenses
-  const sortedExpenses = expenses?.sort((a, b) => {
+  const sortedExpenses = filteredExpenses.sort((a, b) => {
     switch (sortBy) {
       case "amount":
         return b.amount - a.amount;
@@ -313,7 +403,27 @@ export default function Dashboard() {
       default:
         return b.createdAt - a.createdAt;
     }
-  }) || [];
+  });
+
+  // Build data for chart: compare by tag within scope
+  const tagSums: Record<string, { you: number; partner: number }> = {};
+  for (const e of filteredExpenses) {
+    const count = countOccurrencesInWindow(e, fromMs, toMs);
+    if (count <= 0) continue;
+    const tags = e.tags && e.tags.length > 0 ? e.tags : ["untagged"];
+    const amt = e.amount * count;
+    for (const t of tags) {
+      const key = t.toLowerCase();
+      if (!tagSums[key]) tagSums[key] = { you: 0, partner: 0 };
+      if (e.userId === user?._id) tagSums[key].you += amt;
+      else tagSums[key].partner += amt;
+    }
+  }
+  const chartData = Object.entries(tagSums).map(([tag, vals]) => ({
+    tag,
+    you: Number(vals.you.toFixed(2)),
+    partner: Number(vals.partner.toFixed(2)),
+  }));
 
   // helper to open edit dialog prefilled
   function openEditDialog(expense: any) {
@@ -388,7 +498,7 @@ export default function Dashboard() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Expense Tracker</h1>
-            <p className="text-muted-foreground mt-2">Track and compare expenses with your partner</p>
+            <p className="text-muted-foreground-2 mt-2">Track and compare expenses with your partner</p>
           </div>
           <Button variant="outline" onClick={signOut}>
             Sign Out
@@ -464,6 +574,114 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
+            {/* Search & Scope */}
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Search & Scope</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="filter-name">Name</Label>
+                    <Input
+                      id="filter-name"
+                      placeholder="e.g. groceries"
+                      value={filters.name}
+                      onChange={(e) => setFilters((p) => ({ ...p, name: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="filter-person">Person</Label>
+                    <Select
+                      value={filters.person}
+                      onValueChange={(v) =>
+                        setFilters((p) => ({ ...p, person: v as "all" | "you" | "partner" }))
+                      }
+                    >
+                      <SelectTrigger id="filter-person">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="you">You</SelectItem>
+                        <SelectItem value="partner">Partner</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="filter-tags">Tags</Label>
+                    <Input
+                      id="filter-tags"
+                      placeholder="food, utilities"
+                      value={filters.tags}
+                      onChange={(e) => setFilters((p) => ({ ...p, tags: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="filter-type">Type</Label>
+                    <Select
+                      value={filters.type}
+                      onValueChange={(v) =>
+                        setFilters((p) => ({ ...p, type: v as "all" | "one-time" | "recurring" }))
+                      }
+                    >
+                      <SelectTrigger id="filter-type">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="one-time">One-time</SelectItem>
+                        <SelectItem value="recurring">Recurring</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label htmlFor="filter-from">From</Label>
+                    <Input
+                      id="filter-from"
+                      type="date"
+                      value={filters.fromDate}
+                      onChange={(e) => setFilters((p) => ({ ...p, fromDate: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="filter-to">To</Label>
+                    <Input
+                      id="filter-to"
+                      type="date"
+                      value={filters.toDate}
+                      onChange={(e) => setFilters((p) => ({ ...p, toDate: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="text-sm text-muted-foreground">
+                    Scoped totals based on filters and date range
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="text-sm">
+                      <span className="font-medium">You:</span> ${myTotalScoped.toFixed(2)}
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-medium">Partner:</span> ${partnerTotalScoped.toFixed(2)}
+                    </div>
+                    <div className="text-sm">
+                      <span className="font-medium">Difference:</span>{" "}
+                      <span className={scopedDifference >= 0 ? "text-green-600" : "text-red-600"}>
+                        {scopedDifference >= 0 ? "+" : "-"}${Math.abs(scopedDifference).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
               <Card>
@@ -472,7 +690,7 @@ export default function Dashboard() {
                     <TrendingUp className="h-4 w-4 text-green-600" />
                     <span className="text-sm font-medium">Your Total</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">${myTotal.toFixed(2)}</p>
+                  <p className="text-2xl font-bold mt-2">${myTotalScoped.toFixed(2)}</p>
                 </CardContent>
               </Card>
 
@@ -482,7 +700,7 @@ export default function Dashboard() {
                     <TrendingUp className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium">Partner Total</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">${partnerTotal.toFixed(2)}</p>
+                  <p className="text-2xl font-bold mt-2">${partnerTotalScoped.toFixed(2)}</p>
                 </CardContent>
               </Card>
 
@@ -492,7 +710,7 @@ export default function Dashboard() {
                     <BarChart3 className="h-4 w-4 text-purple-600" />
                     <span className="text-sm font-medium">Combined Total</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">${totalExpenses.toFixed(2)}</p>
+                  <p className="text-2xl font-bold mt-2">${(myTotalScoped + partnerTotalScoped).toFixed(2)}</p>
                 </CardContent>
               </Card>
 
@@ -502,11 +720,11 @@ export default function Dashboard() {
                     <TrendingUp className="h-4 w-4 text-orange-600" />
                     <span className="text-sm font-medium">Difference</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">${difference.toFixed(2)}</p>
-                  {myTotal > partnerTotal && (
+                  <p className="text-2xl font-bold mt-2">${Math.abs(scopedDifference).toFixed(2)}</p>
+                  {myTotalScoped > partnerTotalScoped && (
                     <p className="text-xs text-muted-foreground mt-1">You spend more</p>
                   )}
-                  {partnerTotal > myTotal && (
+                  {partnerTotalScoped > myTotalScoped && (
                     <p className="text-xs text-muted-foreground mt-1">Partner spends more</p>
                   )}
                 </CardContent>
@@ -929,6 +1147,38 @@ export default function Dashboard() {
                       </motion.div>
                     ))}
                   </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Tag Comparison Chart */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Tag Comparison (Scoped)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {chartData.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No data in the selected scope.
+                  </div>
+                ) : (
+                  <ChartContainer
+                    className="w-full"
+                    config={{
+                      you: { label: "You", color: "oklch(65% 0.2 170)" },
+                      partner: { label: "Partner", color: "oklch(65% 0.2 40)" },
+                    }}
+                  >
+                    <BarChart data={chartData} margin={{ left: 8, right: 8 }}>
+                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                      <XAxis dataKey="tag" />
+                      <YAxis />
+                      <RechartsTooltip content={<ChartTooltipContent />} />
+                      <RechartsLegend content={<ChartLegendContent />} />
+                      <Bar dataKey="you" fill="var(--color-you)" radius={4} />
+                      <Bar dataKey="partner" fill="var(--color-partner)" radius={4} />
+                    </BarChart>
+                  </ChartContainer>
                 )}
               </CardContent>
             </Card>
