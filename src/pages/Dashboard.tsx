@@ -35,7 +35,13 @@ export default function Dashboard() {
     isRecurring: false,
     startDate: "",
     endDate: "",
-    frequency: "monthly"
+    frequency: "monthly",
+
+    // New fields for scheduling
+    timeOfDay: "",          // HH:MM for daily
+    monthlyDay: "",         // 1..31
+    annualMonth: "",        // 1..12
+    annualDay: "",          // 1..31
   });
 
   // Mutations and queries
@@ -86,7 +92,7 @@ export default function Dashboard() {
     if (!userRoom || !expenseForm.name || !expenseForm.amount) return;
 
     try {
-      await createExpense({
+      const payload: any = {
         roomCode: userRoom.code,
         name: expenseForm.name,
         amount: parseFloat(expenseForm.amount),
@@ -96,7 +102,29 @@ export default function Dashboard() {
         startDate: expenseForm.startDate ? new Date(expenseForm.startDate).getTime() : undefined,
         endDate: expenseForm.endDate ? new Date(expenseForm.endDate).getTime() : undefined,
         frequency: expenseForm.isRecurring ? expenseForm.frequency : undefined,
-      });
+      };
+
+      // Add scheduling fields conditionally
+      if (expenseForm.isRecurring) {
+        if (expenseForm.frequency === "daily" && expenseForm.timeOfDay) {
+          const [hh, mm] = expenseForm.timeOfDay.split(":").map(Number);
+          if (!isNaN(hh) && !isNaN(mm)) {
+            payload.timeOfDayMinutes = hh * 60 + mm;
+          }
+        }
+        if (expenseForm.frequency === "monthly" && expenseForm.monthlyDay) {
+          const d = parseInt(expenseForm.monthlyDay, 10);
+          if (!isNaN(d)) payload.monthlyDay = d;
+        }
+        if (expenseForm.frequency === "annual") {
+          const m = parseInt(expenseForm.annualMonth, 10);
+          const d = parseInt(expenseForm.annualDay, 10);
+          if (!isNaN(m)) payload.annualMonth = m;
+          if (!isNaN(d)) payload.annualDay = d;
+        }
+      }
+
+      await createExpense(payload);
 
       setExpenseForm({
         name: "",
@@ -106,7 +134,11 @@ export default function Dashboard() {
         isRecurring: false,
         startDate: "",
         endDate: "",
-        frequency: "monthly"
+        frequency: "monthly",
+        timeOfDay: "",
+        monthlyDay: "",
+        annualMonth: "",
+        annualDay: "",
       });
       setShowAddExpense(false);
       toast.success("Expense added successfully!");
@@ -131,11 +163,126 @@ export default function Dashboard() {
     }
   };
 
-  // Calculate totals and comparisons
+  // Helper: count occurrences for recurring expenses up to now (respecting scheduling)
+  function countOccurrences(e: any, nowMs: number): number {
+    if (!e.isRecurring) return 1;
+    if (!e.startDate) return 0;
+
+    const start = e.startDate;
+    const end = e.endDate ?? nowMs;
+    const until = Math.min(end, nowMs);
+    if (until < start) return 0;
+
+    const msInDay = 24 * 60 * 60 * 1000;
+
+    const clampDay = (d: number, y: number, m: number) => {
+      // clamp day to month length
+      const last = new Date(y, m + 1, 0).getDate();
+      return Math.max(1, Math.min(d, last));
+    };
+
+    // Align first occurrence time for daily with timeOfDayMinutes
+    if (e.frequency === "daily") {
+      const minutes = typeof e.timeOfDayMinutes === "number" ? e.timeOfDayMinutes : 0;
+      const startDate = new Date(start);
+      const alignedStart = new Date(
+        startDate.getFullYear(),
+        startDate.getMonth(),
+        startDate.getDate(),
+        Math.floor(minutes / 60),
+        minutes % 60,
+        0,
+        0
+      ).getTime();
+
+      // If alignedStart is before provided start timestamp day boundary, keep it; otherwise first occurrence might be next day
+      const first = alignedStart < start ? alignedStart + msInDay : alignedStart;
+      if (until < first) return 0;
+      const diff = until - first;
+      return Math.floor(diff / msInDay) + 1;
+    }
+
+    if (e.frequency === "weekly") {
+      // Use the weekday of startDate; first occurrence is start day/time
+      const first = start;
+      if (until < first) return 0;
+      const weekMs = 7 * msInDay;
+      const diff = until - first;
+      return Math.floor(diff / weekMs) + 1;
+    }
+
+    if (e.frequency === "monthly") {
+      const sd = new Date(start);
+      const monthlyDay = typeof e.monthlyDay === "number" ? e.monthlyDay : sd.getDate();
+
+      // First occurrence
+      const firstDay = clampDay(monthlyDay, sd.getFullYear(), sd.getMonth());
+      let first = new Date(sd.getFullYear(), sd.getMonth(), firstDay, 0, 0, 0, 0).getTime();
+      if (first < start) {
+        // Go to next month
+        const nextMonthDate = new Date(sd.getFullYear(), sd.getMonth() + 1, 1);
+        const d = clampDay(monthlyDay, nextMonthDate.getFullYear(), nextMonthDate.getMonth());
+        first = new Date(nextMonthDate.getFullYear(), nextMonthDate.getMonth(), d, 0, 0, 0, 0).getTime();
+      }
+      if (until < first) return 0;
+
+      // Count months between first and until inclusive
+      const fu = new Date(first);
+      const uu = new Date(until);
+      const monthsDiff = (uu.getFullYear() - fu.getFullYear()) * 12 + (uu.getMonth() - fu.getMonth());
+      // Check if the occurrence day in the last month has passed
+      const lastOccurDay = clampDay(monthlyDay, uu.getFullYear(), uu.getMonth());
+      const lastOccur = new Date(uu.getFullYear(), uu.getMonth(), lastOccurDay, 0, 0, 0, 0).getTime();
+      const passed = until >= lastOccur ? 1 : 0;
+      return monthsDiff + passed;
+    }
+
+    if (e.frequency === "annual") {
+      const sd = new Date(start);
+      const month = typeof e.annualMonth === "number" ? e.annualMonth : (sd.getMonth() + 1); // 1..12
+      const day = typeof e.annualDay === "number" ? e.annualDay : sd.getDate(); // 1..31
+
+      // First occurrence
+      const firstDay = clampDay(day, sd.getFullYear(), month - 1);
+      let first = new Date(sd.getFullYear(), month - 1, firstDay, 0, 0, 0, 0).getTime();
+      if (first < start) {
+        const nextYear = sd.getFullYear() + 1;
+        const d = clampDay(day, nextYear, month - 1);
+        first = new Date(nextYear, month - 1, d, 0, 0, 0, 0).getTime();
+      }
+      if (until < first) return 0;
+
+      const fu = new Date(first);
+      const uu = new Date(until);
+      let yearsDiff = uu.getFullYear() - fu.getFullYear();
+
+      // Has this year's anniversary passed?
+      const thisYearDay = clampDay(day, uu.getFullYear(), month - 1);
+      const thisAnniv = new Date(uu.getFullYear(), month - 1, thisYearDay, 0, 0, 0, 0).getTime();
+      if (until >= thisAnniv) yearsDiff += 1;
+
+      return yearsDiff;
+    }
+
+    // Default (non-recognized frequency): count once
+    return 1;
+  }
+
+  // Compute effective totals with recurrence accumulation
+  const now = Date.now();
   const myExpenses = expenses?.filter(e => e.userId === user?._id) || [];
   const partnerExpenses = expenses?.filter(e => e.userId !== user?._id) || [];
-  const myTotal = myExpenses.reduce((sum, e) => sum + e.amount, 0);
-  const partnerTotal = partnerExpenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const myTotal = myExpenses.reduce((sum, e) => {
+    const count = countOccurrences(e, now);
+    return sum + e.amount * count;
+  }, 0);
+
+  const partnerTotal = partnerExpenses.reduce((sum, e) => {
+    const count = countOccurrences(e, now);
+    return sum + e.amount * count;
+  }, 0);
+
   const totalExpenses = myTotal + partnerTotal;
   const difference = Math.abs(myTotal - partnerTotal);
 
@@ -382,30 +529,67 @@ export default function Dashboard() {
                               <SelectItem value="daily">Daily</SelectItem>
                               <SelectItem value="weekly">Weekly</SelectItem>
                               <SelectItem value="monthly">Monthly</SelectItem>
+                              <SelectItem value="annual">Annual</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        {/* Scheduling fields based on frequency */}
+                        {expenseForm.frequency === "daily" && (
                           <div>
-                            <Label htmlFor="startDate">Start Date</Label>
+                            <Label htmlFor="timeOfDay">Time of Day</Label>
                             <Input
-                              id="startDate"
-                              type="date"
-                              value={expenseForm.startDate}
-                              onChange={(e) => setExpenseForm(prev => ({ ...prev, startDate: e.target.value }))}
+                              id="timeOfDay"
+                              type="time"
+                              value={expenseForm.timeOfDay}
+                              onChange={(e) => setExpenseForm(prev => ({ ...prev, timeOfDay: e.target.value }))}
                             />
                           </div>
+                        )}
+
+                        {expenseForm.frequency === "monthly" && (
                           <div>
-                            <Label htmlFor="endDate">End Date</Label>
+                            <Label htmlFor="monthlyDay">Day of Month (1–31)</Label>
                             <Input
-                              id="endDate"
-                              type="date"
-                              value={expenseForm.endDate}
-                              onChange={(e) => setExpenseForm(prev => ({ ...prev, endDate: e.target.value }))}
+                              id="monthlyDay"
+                              type="number"
+                              min={1}
+                              max={31}
+                              value={expenseForm.monthlyDay}
+                              onChange={(e) => setExpenseForm(prev => ({ ...prev, monthlyDay: e.target.value }))}
+                              placeholder="e.g. 15"
                             />
                           </div>
-                        </div>
+                        )}
+
+                        {expenseForm.frequency === "annual" && (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="annualMonth">Month (1–12)</Label>
+                              <Input
+                                id="annualMonth"
+                                type="number"
+                                min={1}
+                                max={12}
+                                value={expenseForm.annualMonth}
+                                onChange={(e) => setExpenseForm(prev => ({ ...prev, annualMonth: e.target.value }))}
+                                placeholder="e.g. 7"
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="annualDay">Day (1–31)</Label>
+                              <Input
+                                id="annualDay"
+                                type="number"
+                                min={1}
+                                max={31}
+                                value={expenseForm.annualDay}
+                                onChange={(e) => setExpenseForm(prev => ({ ...prev, annualDay: e.target.value }))}
+                                placeholder="e.g. 20"
+                              />
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
 

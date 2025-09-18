@@ -12,7 +12,13 @@ export const create = mutation({
     isRecurring: v.boolean(),
     startDate: v.optional(v.number()),
     endDate: v.optional(v.number()),
-    frequency: v.optional(v.string()), // "daily", "weekly", "monthly"
+    frequency: v.optional(v.string()), // "daily", "weekly", "monthly", "annual"
+
+    // New optional scheduling fields
+    timeOfDayMinutes: v.optional(v.number()),
+    monthlyDay: v.optional(v.number()),
+    annualMonth: v.optional(v.number()),
+    annualDay: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);

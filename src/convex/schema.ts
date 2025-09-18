@@ -53,6 +53,12 @@ const schema = defineSchema(
       endDate: v.optional(v.number()),
       frequency: v.optional(v.string()),
       createdAt: v.number(),
+
+      // Add optional recurrence scheduling fields for correct accumulation
+      timeOfDayMinutes: v.optional(v.number()), // for "daily": minutes since midnight (0..1439)
+      monthlyDay: v.optional(v.number()),       // for "monthly": day of month (1..31)
+      annualMonth: v.optional(v.number()),      // for "annual": month (1..12)
+      annualDay: v.optional(v.number()),        // for "annual": day of month (1..31)
     })
       .index("by_room_code", ["roomCode"])
       .index("by_user", ["userId"])
