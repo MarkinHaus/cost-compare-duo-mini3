@@ -59,3 +59,48 @@ export const deleteExpense = mutation({
     await ctx.db.delete(args.id);
   },
 });
+
+export const updateExpense = mutation({
+  args: {
+    id: v.id("expenses"),
+    name: v.string(),
+    amount: v.number(),
+    purpose: v.string(),
+    tags: v.array(v.string()),
+    isRecurring: v.boolean(),
+    startDate: v.optional(v.number()),
+    endDate: v.optional(v.number()),
+    frequency: v.optional(v.string()),
+    timeOfDayMinutes: v.optional(v.number()),
+    monthlyDay: v.optional(v.number()),
+    annualMonth: v.optional(v.number()),
+    annualDay: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    const existing = await ctx.db.get(args.id);
+    if (!existing || existing.userId !== user._id) {
+      throw new Error("Not authorized");
+    }
+
+    // Build patch; clear recurrence-specific fields when not recurring
+    const patch: Record<string, unknown> = {
+      name: args.name,
+      amount: args.amount,
+      purpose: args.purpose,
+      tags: args.tags,
+      isRecurring: args.isRecurring,
+      startDate: args.isRecurring ? args.startDate ?? undefined : undefined,
+      endDate: args.isRecurring ? args.endDate ?? undefined : undefined,
+      frequency: args.isRecurring ? args.frequency ?? undefined : undefined,
+      timeOfDayMinutes: args.isRecurring ? args.timeOfDayMinutes ?? undefined : undefined,
+      monthlyDay: args.isRecurring ? args.monthlyDay ?? undefined : undefined,
+      annualMonth: args.isRecurring ? args.annualMonth ?? undefined : undefined,
+      annualDay: args.isRecurring ? args.annualDay ?? undefined : undefined,
+    };
+
+    await ctx.db.patch(args.id, patch);
+  },
+});

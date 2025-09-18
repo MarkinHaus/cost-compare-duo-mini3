@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { motion } from "framer-motion";
-import { Plus, Copy, Users, TrendingUp, Calendar, Tag, Trash2, BarChart3 } from "lucide-react";
+import { Plus, Copy, Users, TrendingUp, Calendar, Tag, Trash2, BarChart3, Pencil } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { useMutation, useQuery } from "convex/react";
@@ -25,6 +25,22 @@ export default function Dashboard() {
   const [showJoinRoom, setShowJoinRoom] = useState(false);
   const [joinCode, setJoinCode] = useState("");
   const [sortBy, setSortBy] = useState("date");
+  const [showEditExpense, setShowEditExpense] = useState(false);
+  const [editExpenseId, setEditExpenseId] = useState<Id<"expenses"> | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "",
+    amount: "",
+    purpose: "",
+    tags: "",
+    isRecurring: false,
+    startDate: "",
+    endDate: "",
+    frequency: "monthly",
+    timeOfDay: "",
+    monthlyDay: "",
+    annualMonth: "",
+    annualDay: "",
+  });
 
   // Form state
   const [expenseForm, setExpenseForm] = useState({
@@ -49,6 +65,7 @@ export default function Dashboard() {
   const joinRoom = useMutation(api.rooms.join);
   const createExpense = useMutation(api.expenses.create);
   const deleteExpense = useMutation(api.expenses.deleteExpense);
+  const updateExpense = useMutation(api.expenses.updateExpense);
   const userRoom = useQuery(api.rooms.getUserRoom);
   const expenses = useQuery(api.expenses.getByRoom, 
     userRoom ? { roomCode: userRoom.code } : "skip"
@@ -297,6 +314,68 @@ export default function Dashboard() {
         return b.createdAt - a.createdAt;
     }
   }) || [];
+
+  // helper to open edit dialog prefilled
+  function openEditDialog(expense: any) {
+    setEditExpenseId(expense._id);
+    setEditForm({
+      name: expense.name ?? "",
+      amount: String(expense.amount ?? ""),
+      purpose: expense.purpose ?? "",
+      tags: (expense.tags ?? []).join(", "),
+      isRecurring: !!expense.isRecurring,
+      startDate: expense.startDate ? new Date(expense.startDate).toISOString().slice(0, 10) : "",
+      endDate: expense.endDate ? new Date(expense.endDate).toISOString().slice(0, 10) : "",
+      frequency: expense.frequency ?? "monthly",
+      timeOfDay:
+        typeof expense.timeOfDayMinutes === "number"
+          ? `${String(Math.floor(expense.timeOfDayMinutes / 60)).padStart(2, "0")}:${String(expense.timeOfDayMinutes % 60).padStart(2, "0")}`
+          : "",
+      monthlyDay: expense.monthlyDay ? String(expense.monthlyDay) : "",
+      annualMonth: expense.annualMonth ? String(expense.annualMonth) : "",
+      annualDay: expense.annualDay ? String(expense.annualDay) : "",
+    });
+    setShowEditExpense(true);
+  }
+
+  const handleUpdateExpense = async () => {
+    if (!editExpenseId || !editForm.name || !editForm.amount) return;
+    try {
+      const payload: any = {
+        id: editExpenseId,
+        name: editForm.name,
+        amount: parseFloat(editForm.amount),
+        purpose: editForm.purpose,
+        tags: editForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
+        isRecurring: editForm.isRecurring,
+        startDate: editForm.isRecurring && editForm.startDate ? new Date(editForm.startDate).getTime() : undefined,
+        endDate: editForm.isRecurring && editForm.endDate ? new Date(editForm.endDate).getTime() : undefined,
+        frequency: editForm.isRecurring ? editForm.frequency : undefined,
+      };
+      if (editForm.isRecurring) {
+        if (editForm.frequency === "daily" && editForm.timeOfDay) {
+          const [hh, mm] = editForm.timeOfDay.split(":").map(Number);
+          if (!isNaN(hh) && !isNaN(mm)) payload.timeOfDayMinutes = hh * 60 + mm;
+        }
+        if (editForm.frequency === "monthly" && editForm.monthlyDay) {
+          const d = parseInt(editForm.monthlyDay, 10);
+          if (!isNaN(d)) payload.monthlyDay = d;
+        }
+        if (editForm.frequency === "annual") {
+          const m = parseInt(editForm.annualMonth, 10);
+          const d = parseInt(editForm.annualDay, 10);
+          if (!isNaN(m)) payload.annualMonth = m;
+          if (!isNaN(d)) payload.annualDay = d;
+        }
+      }
+      await updateExpense(payload);
+      setShowEditExpense(false);
+      setEditExpenseId(null);
+      toast.success("Expense updated");
+    } catch {
+      toast.error("Failed to update expense");
+    }
+  };
 
   return (
     <motion.div
@@ -590,11 +669,190 @@ export default function Dashboard() {
                             </div>
                           </div>
                         )}
+
+                        {/* Start / End Dates for recurring */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="startDate">Start Date</Label>
+                            <Input
+                              id="startDate"
+                              type="date"
+                              value={expenseForm.startDate}
+                              onChange={(e) =>
+                                setExpenseForm((prev) => ({ ...prev, startDate: e.target.value }))
+                              }
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="endDate">End Date</Label>
+                            <Input
+                              id="endDate"
+                              type="date"
+                              value={expenseForm.endDate}
+                              onChange={(e) =>
+                                setExpenseForm((prev) => ({ ...prev, endDate: e.target.value }))
+                              }
+                            />
+                          </div>
+                        </div>
                       </>
                     )}
 
                     <Button onClick={handleAddExpense} className="w-full">
                       Add Expense
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+
+              <Dialog open={showEditExpense} onOpenChange={setShowEditExpense}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Edit Expense</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label htmlFor="edit-name">Name</Label>
+                      <Input
+                        id="edit-name"
+                        value={editForm.name}
+                        onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-amount">Amount ($)</Label>
+                      <Input
+                        id="edit-amount"
+                        type="number"
+                        step="0.01"
+                        value={editForm.amount}
+                        onChange={(e) => setEditForm((p) => ({ ...p, amount: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-purpose">Purpose</Label>
+                      <Textarea
+                        id="edit-purpose"
+                        rows={2}
+                        value={editForm.purpose}
+                        onChange={(e) => setEditForm((p) => ({ ...p, purpose: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-tags">Tags (comma-separated)</Label>
+                      <Input
+                        id="edit-tags"
+                        value={editForm.tags}
+                        onChange={(e) => setEditForm((p) => ({ ...p, tags: e.target.value }))}
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="edit-recurring"
+                        checked={editForm.isRecurring}
+                        onCheckedChange={(checked) => setEditForm((p) => ({ ...p, isRecurring: checked }))}
+                      />
+                      <Label htmlFor="edit-recurring">Recurring expense</Label>
+                    </div>
+
+                    {editForm.isRecurring && (
+                      <>
+                        <div>
+                          <Label htmlFor="edit-frequency">Frequency</Label>
+                          <Select
+                            value={editForm.frequency}
+                            onValueChange={(value) => setEditForm((p) => ({ ...p, frequency: value }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="daily">Daily</SelectItem>
+                              <SelectItem value="weekly">Weekly</SelectItem>
+                              <SelectItem value="monthly">Monthly</SelectItem>
+                              <SelectItem value="annual">Annual</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {editForm.frequency === "daily" && (
+                          <div>
+                            <Label htmlFor="edit-timeOfDay">Time of Day</Label>
+                            <Input
+                              id="edit-timeOfDay"
+                              type="time"
+                              value={editForm.timeOfDay}
+                              onChange={(e) => setEditForm((p) => ({ ...p, timeOfDay: e.target.value }))}
+                            />
+                          </div>
+                        )}
+
+                        {editForm.frequency === "monthly" && (
+                          <div>
+                            <Label htmlFor="edit-monthlyDay">Day of Month (1–31)</Label>
+                            <Input
+                              id="edit-monthlyDay"
+                              type="number"
+                              min={1}
+                              max={31}
+                              value={editForm.monthlyDay}
+                              onChange={(e) => setEditForm((p) => ({ ...p, monthlyDay: e.target.value }))}
+                            />
+                          </div>
+                        )}
+
+                        {editForm.frequency === "annual" && (
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <Label htmlFor="edit-annualMonth">Month (1–12)</Label>
+                              <Input
+                                id="edit-annualMonth"
+                                type="number"
+                                min={1}
+                                max={12}
+                                value={editForm.annualMonth}
+                                onChange={(e) => setEditForm((p) => ({ ...p, annualMonth: e.target.value }))}
+                              />
+                            </div>
+                            <div>
+                              <Label htmlFor="edit-annualDay">Day (1–31)</Label>
+                              <Input
+                                id="edit-annualDay"
+                                type="number"
+                                min={1}
+                                max={31}
+                                value={editForm.annualDay}
+                                onChange={(e) => setEditForm((p) => ({ ...p, annualDay: e.target.value }))}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <Label htmlFor="edit-startDate">Start Date</Label>
+                            <Input
+                              id="edit-startDate"
+                              type="date"
+                              value={editForm.startDate}
+                              onChange={(e) => setEditForm((p) => ({ ...p, startDate: e.target.value }))}
+                            />
+                          </div>
+                          <div>
+                            <Label htmlFor="edit-endDate">End Date</Label>
+                            <Input
+                              id="edit-endDate"
+                              type="date"
+                              value={editForm.endDate}
+                              onChange={(e) => setEditForm((p) => ({ ...p, endDate: e.target.value }))}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    <Button onClick={handleUpdateExpense} className="w-full">
+                      Save Changes
                     </Button>
                   </div>
                 </DialogContent>
@@ -648,13 +906,24 @@ export default function Dashboard() {
                         <div className="flex items-center gap-4">
                           <span className="text-lg font-semibold">${expense.amount.toFixed(2)}</span>
                           {expense.userId === user?._id && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteExpense(expense._id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEditDialog(expense)}
+                                title="Edit"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteExpense(expense._id)}
+                                title="Delete"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           )}
                         </div>
                       </motion.div>
