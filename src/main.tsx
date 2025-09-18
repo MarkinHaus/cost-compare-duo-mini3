@@ -29,6 +29,42 @@ if (storedTheme === "dark") {
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker
+      .register("/service-worker.js")
+      .catch((err) => console.warn("SW registration failed:", err));
+  });
+}
+
+// Handle PWA install prompt across browsers
+(function setupInstallPrompt() {
+  let deferredPrompt: any = null;
+
+  window.addEventListener("beforeinstallprompt", (e: Event) => {
+    e.preventDefault();
+    // @ts-ignore
+    deferredPrompt = e;
+    // Simple UX: ask user via confirm; browser prompt shown on accept
+    const wantsInstall = window.confirm(
+      "Install Cost Compare Duo mini for a better experience?"
+    );
+    if (wantsInstall && deferredPrompt) {
+      // @ts-ignore
+      deferredPrompt.prompt();
+      // @ts-ignore
+      deferredPrompt.userChoice?.then?.(() => {
+        deferredPrompt = null;
+      });
+    }
+  });
+
+  window.addEventListener("appinstalled", () => {
+    deferredPrompt = null;
+    console.log("PWA installed");
+  });
+})();
+
 function RouteSyncer() {
   const location = useLocation();
   useEffect(() => {
