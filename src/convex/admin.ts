@@ -6,14 +6,27 @@ import { roleValidator } from "./schema";
 // Admin email - hardcoded and not exposed to frontend
 const ADMIN_EMAIL = "markinhausmanns@gmail.com";
 
+// Enhance admin checks to also validate the users document and use case-insensitive comparison
+function isAdminEmail(email: string | null | undefined) {
+  return (email ?? "").toLowerCase() === ADMIN_EMAIL.toLowerCase();
+}
+
 export const listUsers = query({
   args: {},
   handler: async (ctx) => {
-    // Use auth identity directly to avoid any throws inside getCurrentUser
     const identity = await ctx.auth.getUserIdentity();
-    const email = identity?.email ?? null;
-    if (!email || email !== ADMIN_EMAIL) {
-      // Return empty list instead of throwing to avoid client crash
+    let authorized = isAdminEmail(identity?.email);
+
+    if (!authorized) {
+      try {
+        const currentUser = await getCurrentUser(ctx);
+        authorized = isAdminEmail(currentUser?.email);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!authorized) {
       return [];
     }
 
@@ -67,11 +80,19 @@ export const setUserPremium = mutation({
 export const getConfig = query({
   args: {},
   handler: async (ctx) => {
-    // Use auth identity directly to avoid any throws inside getCurrentUser
     const identity = await ctx.auth.getUserIdentity();
-    const email = identity?.email ?? null;
-    if (!email || email !== ADMIN_EMAIL) {
-      // Return null instead of throwing to avoid client crash
+    let authorized = isAdminEmail(identity?.email);
+
+    if (!authorized) {
+      try {
+        const currentUser = await getCurrentUser(ctx);
+        authorized = isAdminEmail(currentUser?.email);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!authorized) {
       return null;
     }
 

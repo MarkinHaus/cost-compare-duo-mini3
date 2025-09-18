@@ -641,6 +641,9 @@ export default function Dashboard() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Expense Tracker</h1>
             <p className="text-muted-foreground-2 mt-2">Track and compare expenses with your partner</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Signed in as: {user?.email ?? "Anonymous"}
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="ghost" onClick={() => navigate("/admin")}>
