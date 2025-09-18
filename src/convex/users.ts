@@ -1,5 +1,6 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { query, QueryCtx } from "./_generated/server";
+import { v } from "convex/values";
 
 /**
  * Get the current signed in user. Returns null if the user is not signed in.
@@ -31,3 +32,21 @@ export const getCurrentUser = async (ctx: QueryCtx) => {
   }
   return await ctx.db.get(userId);
 };
+
+// Add: fetch minimal public profiles for a list of user ids
+export const getProfilesByIds = query({
+  args: { ids: v.array(v.id("users")) },
+  handler: async (ctx, args) => {
+    const results = [];
+    for (const id of args.ids) {
+      const u = await ctx.db.get(id);
+      if (u) {
+        results.push({
+          _id: u._id,
+          email: (u as any).email ?? null,
+        });
+      }
+    }
+    return results;
+  },
+});

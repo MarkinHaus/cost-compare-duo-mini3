@@ -81,6 +81,12 @@ export default function Dashboard() {
     userRoom ? { roomCode: userRoom.code } : "skip"
   );
 
+  // Add: load member profiles for labeling when rooms have >2 members
+  const memberProfiles = useQuery(
+    api.users.getProfilesByIds,
+    userRoom ? { ids: userRoom.members as any } : "skip"
+  );
+
   const [filters, setFilters] = useState({
     name: "",
     person: "all" as "all" | "you" | "partner",
@@ -449,6 +455,17 @@ export default function Dashboard() {
     }
     // legacy two-person mode: attribute to payer only
     return [e.userId];
+  }
+
+  // Add: user label helper (email handle or short id), keeps "You" for current user
+  function userLabel(id: string): string {
+    if (id === (user?._id as any)) return "You";
+    const profile = (memberProfiles || []).find((p: any) => p._id === id);
+    const handle =
+      (profile?.email && String(profile.email).split("@")[0]) || null;
+    if (handle && handle.length > 0) return handle;
+    const shortId = typeof id === "string" ? id.slice(0, 6) : "user";
+    return shortId;
   }
 
   // Compute date window from filters
@@ -1229,7 +1246,7 @@ export default function Dashboard() {
                                         });
                                       }}
                                     />
-                                    <span className="text-sm">Member {idx + 1}</span>
+                                    <span className="text-sm">{userLabel(memberId)}</span>
                                   </label>
                                 );
                               })}
@@ -1411,7 +1428,7 @@ export default function Dashboard() {
                                         });
                                       }}
                                     />
-                                    <span className="text-sm">Member {idx + 1}</span>
+                                    <span className="text-sm">{userLabel(memberId)}</span>
                                   </label>
                                 );
                               })}
@@ -1452,7 +1469,7 @@ export default function Dashboard() {
                           <div className="flex items-center gap-3">
                             <h3 className="font-medium">{expense.name}</h3>
                             <Badge variant={expense.userId === user?._id ? "default" : "secondary"}>
-                              {expense.userId === user?._id ? "You" : "Partner"}
+                              {userLabel(expense.userId as any)}
                             </Badge>
                             {expense.isRecurring && (
                               <Badge variant="outline">
@@ -1684,7 +1701,7 @@ export default function Dashboard() {
                   {sortedExpenses.map((e) => (
                     <tr key={e._id}>
                       <td className="border-b py-2 pr-2">{e.name}</td>
-                      <td className="border-b py-2 pr-2">{e.userId === user?._id ? "You" : "Partner"}</td>
+                      <td className="border-b py-2 pr-2">{userLabel(e.userId as any)}</td>
                       <td className="border-b py-2 pr-2">{(e.tags || []).join(", ") || "—"}</td>
                       <td className="border-b py-2 pr-2">
                         {e.isRecurring ? `recurring (${e.frequency})` : "one-time"}
