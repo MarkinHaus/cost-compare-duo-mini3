@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getCurrentUser } from "./users";
+/* removed unused internal import */
 
 export const startTrial = mutation({
   args: {},
@@ -57,3 +58,41 @@ export const getPricing = query({
     };
   },
 });
+
+// Internal: upsert user billing state from Stripe webhook
+export const upsertFromStripe = internalMutation({
+  args: {
+    userId: v.id("users"),
+    premium: v.boolean(),
+    plan: v.optional(v.string()),
+    billingCustomerId: v.optional(v.string()),
+    billingSubscriptionId: v.optional(v.string()),
+    trialEnd: v.optional(v.number()),
+    cancelAtPeriodEnd: v.optional(v.boolean()),
+    billingProvider: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.get(args.userId);
+    if (!existing) return;
+    await ctx.db.patch(args.userId, {
+      premium: args.premium,
+      plan: args.plan ?? existing.plan,
+      billingCustomerId: args.billingCustomerId ?? existing.billingCustomerId,
+      billingSubscriptionId: args.billingSubscriptionId ?? existing.billingSubscriptionId,
+      trialEnd: args.trialEnd ?? existing.trialEnd,
+      cancelAtPeriodEnd: args.cancelAtPeriodEnd ?? existing.cancelAtPeriodEnd,
+      billingProvider: args.billingProvider ?? existing.billingProvider,
+    });
+  },
+});
+
+// Internal: fetch current user doc for actions
+export const currentUserRaw = internalQuery({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    return user ?? null;
+  },
+});
+
+/* moved cancelAtPeriodEnd to a Node action in subscriptions_actions.ts */

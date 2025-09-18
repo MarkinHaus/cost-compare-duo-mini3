@@ -86,6 +86,7 @@ export default function Dashboard() {
 
   const startTrial = useMutation(api.subscriptions.startTrial);
   const createPaymentLink = useAction(api.stripe.createPaymentLink);
+  const cancelAtPeriodEnd = useAction(api.subscriptions_actions.cancelAtPeriodEnd);
   const userBilling = useQuery(api.subscriptions.getMe);
   const pricing = useQuery(api.subscriptions.getPricing);
 
@@ -264,6 +265,15 @@ export default function Dashboard() {
       window.location.href = url;
     } catch (error) {
       toast.error("Failed to get checkout URL");
+    }
+  };
+
+  const handleCancelAtPeriodEnd = async () => {
+    try {
+      await cancelAtPeriodEnd({});
+      toast.success("Subscription will be canceled at the end of the current period");
+    } catch (e) {
+      toast.error("Failed to schedule cancellation");
     }
   };
 
@@ -737,7 +747,7 @@ export default function Dashboard() {
                 <CardTitle>Subscription</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex gap-4">
+                <div className="flex flex-wrap gap-4 items-center">
                   {!userBilling?.premium && (
                     <Button onClick={handleStartTrial} variant="outline">
                       Start 7-day free trial
@@ -746,6 +756,11 @@ export default function Dashboard() {
                   <Button onClick={handleSubscribe}>
                     Subscribe ${((pricing?.planPriceCents ?? 120) / 100).toFixed(2)}/mo
                   </Button>
+                  {userBilling?.premium && (
+                    <Button variant="destructive" onClick={handleCancelAtPeriodEnd}>
+                      Cancel at end of period
+                    </Button>
+                  )}
                 </div>
                 {userBilling?.trialActive && (
                   <p className="text-sm text-muted-foreground">

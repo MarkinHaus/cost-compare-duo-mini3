@@ -21,6 +21,7 @@ import type * as http from "../http.js";
 import type * as rooms from "../rooms.js";
 import type * as stripe from "../stripe.js";
 import type * as subscriptions from "../subscriptions.js";
+import type * as subscriptions_actions from "../subscriptions_actions.js";
 import type * as users from "../users.js";
 
 /**
@@ -40,6 +41,7 @@ declare const fullApi: ApiFromModules<{
   rooms: typeof rooms;
   stripe: typeof stripe;
   subscriptions: typeof subscriptions;
+  subscriptions_actions: typeof subscriptions_actions;
   users: typeof users;
 }>;
 export declare const api: FilterApi<

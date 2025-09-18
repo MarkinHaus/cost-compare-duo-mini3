@@ -37,6 +37,9 @@ const schema = defineSchema(
       trialEnd: v.optional(v.number()),
       billingCustomerId: v.optional(v.string()),
       billingProvider: v.optional(v.string()),
+      // Add: track Stripe subscription id and local cancel flag
+      billingSubscriptionId: v.optional(v.string()),
+      cancelAtPeriodEnd: v.optional(v.boolean()),
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
     rooms: defineTable({
