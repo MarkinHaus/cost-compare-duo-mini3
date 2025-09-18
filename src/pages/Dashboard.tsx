@@ -453,6 +453,11 @@ export default function Dashboard() {
   const fromMs = filters.fromDate ? new Date(filters.fromDate).getTime() : 0;
   const toMs = filters.toDate ? new Date(filters.toDate).getTime() : Date.now();
 
+  // Add: determine report type based on whether the selected window goes beyond "today"
+  const nowMs = Date.now();
+  const isForecast = toMs > nowMs;
+  const reportType = isForecast ? "Analyse & Prognose" : "Steuererklärung";
+
   // Parse tags filter into a set
   const tagFilterSet = new Set(
     filters.tags
@@ -657,7 +662,8 @@ export default function Dashboard() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="min-h-screen bg-background p-8"
+      // Add: hide the main UI while printing
+      className="min-h-screen bg-background p-8 print:hidden"
     >
       <div className="max-w-6xl mx-auto space-y-8">
         {/* Header */}
@@ -931,6 +937,13 @@ export default function Dashboard() {
                       </span>
                     </div>
                   </div>
+                </div>
+
+                {/* Add: Export PDF button */}
+                <div className="flex justify-end">
+                  <Button variant="outline" onClick={() => window.print()}>
+                    Export PDF
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1515,6 +1528,90 @@ export default function Dashboard() {
             </Card>
           </>
         )}
+      </div>
+
+      {/* Add: Print-only report layout */}
+      <div className="hidden print:block p-8">
+        <div className="max-w-5xl mx-auto space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">ExpenseSync – Bericht</h1>
+              <p className="text-sm text-muted-foreground">
+                Generiert am {new Date().toLocaleString()}
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-muted-foreground">Berichtstyp</p>
+              <p className="text-lg font-semibold">{reportType}</p>
+            </div>
+          </div>
+
+          <div className="border rounded-md p-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Zeitraum</p>
+                <p className="font-medium">
+                  {filters.fromDate ? new Date(filters.fromDate).toLocaleDateString() : "—"}{" "}
+                  bis{" "}
+                  {filters.toDate ? new Date(filters.toDate).toLocaleDateString() : new Date().toLocaleDateString()}
+                </p>
+              </div>
+              <div className="flex items-center gap-8">
+                <div>
+                  <p className="text-sm text-muted-foreground">You</p>
+                  <p className="text-xl font-semibold">{currencySymbol}{myTotalScoped.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Partner</p>
+                  <p className="text-xl font-semibold">{currencySymbol}{partnerTotalScoped.toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground">Differenz</p>
+                  <p className="text-xl font-semibold">
+                    {currencySymbol}{Math.abs(scopedDifference).toFixed(2)} {scopedDifference >= 0 ? "(You)" : "(Partner)"}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              Dieser Bericht basiert auf dem aktuell gewählten Zeitraum und den gesetzten Filtern.
+            </p>
+          </div>
+
+          <div>
+            <h2 className="text-lg font-semibold mb-2">Ausgaben (gefiltert)</h2>
+            {sortedExpenses.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Keine Ausgaben im gewählten Zeitraum.</p>
+            ) : (
+              <table className="w-full border-collapse text-sm">
+                <thead>
+                  <tr>
+                    <th className="border-b text-left py-2">Name</th>
+                    <th className="border-b text-left py-2">Person</th>
+                    <th className="border-b text-left py-2">Tags</th>
+                    <th className="border-b text-left py-2">Typ</th>
+                    <th className="border-b text-right py-2">Betrag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedExpenses.map((e) => (
+                    <tr key={e._id}>
+                      <td className="border-b py-2 pr-2">{e.name}</td>
+                      <td className="border-b py-2 pr-2">{e.userId === user?._id ? "You" : "Partner"}</td>
+                      <td className="border-b py-2 pr-2">{(e.tags || []).join(", ") || "—"}</td>
+                      <td className="border-b py-2 pr-2">
+                        {e.isRecurring ? `recurring (${e.frequency})` : "one-time"}
+                      </td>
+                      <td className="border-b py-2 pl-2 text-right">
+                        {currencySymbol}{e.amount.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
       </div>
     </motion.div>
   );
