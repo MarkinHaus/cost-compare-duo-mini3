@@ -1885,10 +1885,24 @@ export default function Dashboard() {
                       </BarChart>
                     ) : (
                       <PieChart>
-                        <Pie data={chartData} dataKey="you" nameKey="tag" cx="50%" cy="50%" outerRadius={80} innerRadius={60} fill="#8884d8" />
-                        <Pie data={chartData} dataKey="partner" nameKey="tag" cx="50%" cy="50%" outerRadius={80} innerRadius={60} fill="#82ca9d" />
-                        <Cell key="you" fill="#8884d8" />
-                        <Cell key="partner" fill="#82ca9d" />
+                        <RechartsTooltip />
+                        <RechartsLegend />
+                        <Pie
+                          data={pieData}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          innerRadius={60}
+                        >
+                          {pieData.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={PIE_COLORS[index % PIE_COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
                       </PieChart>
                     )}
                   </ChartContainer>
@@ -2293,7 +2307,10 @@ export default function Dashboard() {
                     label={(entry) => `${entry.name}`}
                   >
                     {pieData.map((entry, index) => (
-                      <Cell key={`print-cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      <Cell
+                        key={`print-cell-${index}`}
+                        fill={PIE_COLORS[index % PIE_COLORS.length]}
+                      />
                     ))}
                   </Pie>
                 </PieChart>
