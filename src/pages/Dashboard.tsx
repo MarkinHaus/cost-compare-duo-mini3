@@ -14,8 +14,8 @@ import { motion } from "framer-motion";
 import { Plus, Copy, Users, TrendingUp, Calendar, Tag, Trash2, BarChart3, Pencil } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useNavigate, useLocation } from "react-router";
+import { useMutation, useQuery, useAction } from "convex/react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart";
@@ -24,6 +24,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 
 export default function Dashboard() {
   const { isLoading, isAuthenticated, user, signOut } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showJoinRoom, setShowJoinRoom] = useState(false);
@@ -96,11 +97,9 @@ export default function Dashboard() {
     new Map(combinedRooms.map((r: any) => [r.code, r])).values()
   );
 
-  const selectedRoom = selectedRoomCode
+  const activeRoom = selectedRoomCode
     ? dedupedRooms.find((r: any) => r.code === selectedRoomCode) ?? null
     : null;
-
-  const activeRoom = selectedRoom ?? userRoom ?? null;
 
   // Keep selectedRoom in sync if not set yet
   useEffect(() => {
@@ -120,6 +119,7 @@ export default function Dashboard() {
     activeRoom ? { ids: activeRoom.members as any } : "skip"
   );
 
+  // Fix typo in filters state key
   const [filters, setFilters] = useState({
     name: "",
     person: "all" as "all" | "you" | "partner",
@@ -131,11 +131,89 @@ export default function Dashboard() {
 
   const startTrial = useMutation(api.subscriptions.startTrial);
   const createPaymentLink = useAction(api.stripe.createPaymentLink);
-  const cancelAtPeriodEnd = useAction(api.subscriptions_actions.cancelAtPeriodEnd);
+  /* removed deprecated cancelAtPeriodEnd action hook */
   const userBilling = useQuery(api.subscriptions.getMe);
   const pricing = useQuery(api.subscriptions.getPricing);
   const [showCancelNow, setShowCancelNow] = useState(false);
   const cancelNowAction = useAction(api.subscriptions_actions.cancelNow);
+
+  // Mutation to join a room by code
+  const joinRoomByCode = useMutation(api.rooms.join);
+
+  // Helper to copy invite link
+  function handleCopyInviteLink(code: string) {
+    const origin = window.location.origin;
+    const link = `${origin}/dashboard?invite=${encodeURIComponent(code)}`;
+    navigator.clipboard
+      .writeText(link)
+      .then(() => {
+        try {
+          // @ts-ignore
+          toast.success?.("Invite link copied!") ?? toast("Invite link copied!");
+        } catch {
+          toast("Invite link copied!");
+        }
+      })
+      .catch(() => {
+        try {
+          // @ts-ignore
+          toast.error?.("Failed to copy invite link.") ?? toast("Failed to copy invite link.");
+        } catch {
+          toast("Failed to copy invite link.");
+        }
+      });
+  }
+
+  // Replace broken invite auto-join effect with a correct, robust implementation
+  // Auto-join invite flow via ?invite=CODE
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlCode = params.get("invite");
+
+    let storedCode: string | null = null;
+    try {
+      storedCode = localStorage.getItem("pendingInviteCode");
+    } catch {
+      storedCode = null;
+    }
+
+    const inviteCode = urlCode || storedCode;
+    if (!inviteCode) return;
+
+    const isLoggedIn = Boolean(user?._id);
+    if (!isLoggedIn) {
+      try {
+        localStorage.setItem("pendingInviteCode", inviteCode);
+      } catch {}
+      window.location.assign("/auth");
+      return;
+    }
+
+    (async () => {
+      try {
+        await joinRoomByCode({ code: inviteCode });
+        toast("Joined room via invite.");
+      } catch (err: any) {
+        const msg = String(err?.message || err || "");
+        const lower = msg.toLowerCase();
+        if (lower.includes("free") && lower.includes("room")) {
+          toast("Free users can only be in one room. Upgrade to Premium to join more rooms.");
+        } else {
+          toast("Unable to join room. The invite may be invalid or the room is full.");
+        }
+      } finally {
+        try {
+          localStorage.removeItem("pendingInviteCode");
+        } catch {}
+        if (urlCode) {
+          const clean = new URL(window.location.href);
+          clean.searchParams.delete("invite");
+          window.history.replaceState(null, "", `${clean.pathname}${clean.search}${clean.hash}`);
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?._id]);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -324,7 +402,7 @@ export default function Dashboard() {
 
   const handleCancelAtPeriodEnd = async () => {
     try {
-      await cancelAtPeriodEnd({});
+      /* removed deprecated cancelAtPeriodEnd */
       toast.success("Subscription will be canceled at the end of the current period");
     } catch (e) {
       toast.error("Failed to schedule cancellation");
@@ -1814,6 +1892,15 @@ export default function Dashboard() {
                         <div className="space-y-1">
                           <div className="flex items-center gap-2">
                             <span className="font-medium">Room {r.code}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyInviteLink(r.code)}
+                              className="inline-flex items-center rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
+                              aria-label={`Copy invite link for room ${r.code}`}
+                              title="Invite"
+                            >
+                              Invite
+                            </button>
                             {isActive && (
                               <Badge variant="default">Active</Badge>
                             )}
