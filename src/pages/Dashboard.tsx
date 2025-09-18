@@ -127,6 +127,30 @@ export default function Dashboard() {
     if (!userRoom || !expenseForm.name || !expenseForm.amount) return;
 
     try {
+      // Enforce and default scheduling for recurring expenses
+      let timeOfDay = expenseForm.timeOfDay;
+      let monthlyDay = expenseForm.monthlyDay;
+      let annualMonth = expenseForm.annualMonth;
+      let annualDay = expenseForm.annualDay;
+
+      if (expenseForm.isRecurring) {
+        if (!expenseForm.startDate) {
+          toast.error("Start date is required for recurring expenses");
+          return;
+        }
+        const start = new Date(expenseForm.startDate);
+        if (expenseForm.frequency === "daily" && !timeOfDay) {
+          timeOfDay = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
+        }
+        if (expenseForm.frequency === "monthly" && !monthlyDay) {
+          monthlyDay = String(start.getDate());
+        }
+        if (expenseForm.frequency === "annual") {
+          if (!annualMonth) annualMonth = String(start.getMonth() + 1);
+          if (!annualDay) annualDay = String(start.getDate());
+        }
+      }
+
       const payload: any = {
         roomCode: userRoom.code,
         name: expenseForm.name,
@@ -139,21 +163,21 @@ export default function Dashboard() {
         frequency: expenseForm.isRecurring ? expenseForm.frequency : undefined,
       };
 
-      // Add scheduling fields conditionally
+      // Add scheduling fields conditionally with defaults applied above
       if (expenseForm.isRecurring) {
-        if (expenseForm.frequency === "daily" && expenseForm.timeOfDay) {
-          const [hh, mm] = expenseForm.timeOfDay.split(":").map(Number);
+        if (expenseForm.frequency === "daily" && timeOfDay) {
+          const [hh, mm] = timeOfDay.split(":").map(Number);
           if (!isNaN(hh) && !isNaN(mm)) {
             payload.timeOfDayMinutes = hh * 60 + mm;
           }
         }
-        if (expenseForm.frequency === "monthly" && expenseForm.monthlyDay) {
-          const d = parseInt(expenseForm.monthlyDay, 10);
+        if (expenseForm.frequency === "monthly" && monthlyDay) {
+          const d = parseInt(monthlyDay, 10);
           if (!isNaN(d)) payload.monthlyDay = d;
         }
         if (expenseForm.frequency === "annual") {
-          const m = parseInt(expenseForm.annualMonth, 10);
-          const d = parseInt(expenseForm.annualDay, 10);
+          const m = annualMonth ? parseInt(annualMonth, 10) : NaN;
+          const d = annualDay ? parseInt(annualDay, 10) : NaN;
           if (!isNaN(m)) payload.annualMonth = m;
           if (!isNaN(d)) payload.annualDay = d;
         }
