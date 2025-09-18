@@ -3,19 +3,23 @@ import { mutation, query } from "./_generated/server";
 import { getCurrentUser } from "./users";
 
 export const create = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: { maxMembers: v.optional(v.number()) },
+  handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
     // Generate a 6-character room code
     const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
+    // Default to 2 if not provided; clamp to at least 2
+    const maxMembers = Math.max(2, Math.floor(args.maxMembers ?? 2));
+
     return await ctx.db.insert("rooms", {
       code: roomCode,
       createdBy: user._id,
       members: [user._id],
       createdAt: Date.now(),
+      maxMembers,
     });
   },
 });
@@ -32,6 +36,11 @@ export const join = mutation({
       .unique();
 
     if (!room) throw new Error("Room not found");
+
+    // Enforce capacity
+    if (room.members.length >= room.maxMembers) {
+      throw new Error("Room is full");
+    }
 
     if (!room.members.includes(user._id)) {
       await ctx.db.patch(room._id, {

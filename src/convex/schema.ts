@@ -37,6 +37,8 @@ const schema = defineSchema(
       createdBy: v.id("users"),
       members: v.array(v.id("users")),
       createdAt: v.number(),
+      // Add: maximum number of members allowed in the room
+      maxMembers: v.number(),
     })
       .index("by_code", ["code"])
       .index("by_member", ["members"]),

@@ -98,7 +98,14 @@ export default function Dashboard() {
 
   const handleCreateRoom = async () => {
     try {
-      const room = await createRoom({});
+      // Prompt for custom max members (minimal UI change)
+      const input = window.prompt("Set max members for this room (min 2):", "2");
+      let maxMembers: number | undefined = undefined;
+      if (input !== null) {
+        const n = Number(input);
+        if (!Number.isNaN(n)) maxMembers = Math.max(2, Math.floor(n));
+      }
+      await createRoom(maxMembers ? { maxMembers } : {});
       toast.success("Room created successfully!");
     } catch (error) {
       toast.error("Failed to create room");
