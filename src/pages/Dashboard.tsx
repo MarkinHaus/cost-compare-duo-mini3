@@ -662,10 +662,10 @@ export default function Dashboard() {
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      // Add: hide the main UI while printing
-      className="min-h-screen bg-background p-8 print:hidden"
+      className="min-h-screen bg-background p-8"
     >
-      <div className="max-w-6xl mx-auto space-y-8">
+      {/* Update: add print:hidden to the main content wrapper */}
+      <div className="max-w-6xl mx-auto space-y-8 print:hidden">
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
