@@ -194,3 +194,62 @@ export const removeUser = mutation({
     await ctx.db.delete(args.userId);
   },
 });
+
+// NEW: listRooms (admin only)
+export const listRooms = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    let authorized = isAdminEmail(identity?.email);
+
+    if (!authorized) {
+      try {
+        const currentUser = await getCurrentUser(ctx);
+        authorized = isAdminEmail(currentUser?.email);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (!authorized) {
+      return [];
+    }
+
+    const rooms = await ctx.db.query("rooms").collect();
+    return rooms.map((room) => ({
+      _id: room._id,
+      code: room.code,
+      createdBy: room.createdBy,
+      membersCount: room.members.length,
+      currencyCode: room.currencyCode,
+      currencySymbol: room.currencySymbol,
+      maxMembers: room.maxMembers,
+    }));
+  },
+});
+
+// NEW: removeRoom (admin only)
+export const removeRoom = mutation({
+  args: { roomId: v.id("rooms") },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+    if (!currentUser || !isAdminEmail(currentUser.email)) {
+      throw new Error("Not authorized");
+    }
+
+    const room = await ctx.db.get(args.roomId);
+    if (!room) {
+      throw new Error("Room not found");
+    }
+
+    // Delete all expenses belonging to this room
+    for await (const re of ctx.db
+      .query("expenses")
+      .withIndex("by_room_code", (q) => q.eq("roomCode", room.code))) {
+      await ctx.db.delete(re._id);
+    }
+
+    // Finally delete the room
+    await ctx.db.delete(room._id);
+  },
+});

@@ -17,6 +17,9 @@ export default function Admin() {
   const setUserPremium = useMutation(api.admin.setUserPremium);
   const config = useQuery(api.admin.getConfig);
   const setConfig = useMutation(api.admin.setConfig);
+  const removeUser = useMutation(api.admin.removeUser);
+  const rooms = useQuery(api.admin.listRooms);
+  const removeRoom = useMutation(api.admin.removeRoom);
 
   const handleRoleChange = async (userId: Id<"users">, role: Role) => {
     try {
@@ -38,6 +41,28 @@ export default function Admin() {
       toast.success(`Premium ${premium ? "enabled" : "disabled"} successfully`);
     } catch (error) {
       toast.error("Failed to update premium status");
+    }
+  };
+
+  const handleDeleteUser = async (userId: Id<"users">) => {
+    const ok = window.confirm("Are you sure you want to delete this user? This will remove their expenses and may delete empty rooms.");
+    if (!ok) return;
+    try {
+      await removeUser({ userId });
+      toast.success("User deleted");
+    } catch (e) {
+      toast.error("Failed to delete user");
+    }
+  };
+
+  const handleDeleteRoom = async (roomId: Id<"rooms">) => {
+    const ok = window.confirm("Delete this room and all its expenses?");
+    if (!ok) return;
+    try {
+      await removeRoom({ roomId });
+      toast.success("Room deleted");
+    } catch (e) {
+      toast.error("Failed to delete room");
     }
   };
 
@@ -160,10 +185,42 @@ export default function Admin() {
                         onCheckedChange={(checked) => handlePremiumToggle(user._id, checked)}
                       />
                     </div>
+                    <Button variant="destructive" onClick={() => handleDeleteUser(user._id)}>
+                      Delete
+                    </Button>
                   </div>
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Rooms Management</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {!rooms ? (
+              <div className="text-sm text-muted-foreground">Loading rooms...</div>
+            ) : rooms.length === 0 ? (
+              <div className="text-sm text-muted-foreground">No rooms found.</div>
+            ) : (
+              <div className="space-y-3">
+                {rooms.map((room) => (
+                  <div key={room._id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex flex-col gap-1">
+                      <div className="font-medium">Code: {room.code}</div>
+                      <div className="text-sm text-muted-foreground">
+                        Members: {room.membersCount} · Max: {room.maxMembers} · Currency: {room.currencySymbol} ({room.currencyCode})
+                      </div>
+                    </div>
+                    <Button variant="destructive" onClick={() => handleDeleteRoom(room._id)}>
+                      Delete Room
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
