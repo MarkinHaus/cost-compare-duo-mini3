@@ -229,6 +229,112 @@ export function InstrumentationProvider({
       window.removeEventListener("unhandledrejection", handleRejection);
     };
   }, []);
+
+  // PostHog privacy-aware initialization tied to cookie consent
+  useEffect(() => {
+    let isMounted = true;
+
+    const getConsent = () => {
+      try {
+        const accepted = localStorage.getItem("cookieConsentAccepted");
+        const level = localStorage.getItem("cookieConsentLevel"); // e.g. "analytics" | "none" | "all"
+        const consentAccepted = accepted === "true";
+        const analyticsEnabled =
+          !level || level === "analytics" || level === "all";
+        return { consentAccepted, analyticsEnabled };
+      } catch {
+        return { consentAccepted: false, analyticsEnabled: false };
+      }
+    };
+
+    const ensurePosthog = async () => {
+      if (!isMounted) return;
+      if (!import.meta.env.VITE_POSTHOG_KEY) {
+        // No key configured; do nothing.
+        return;
+      }
+      if (!__posthog) {
+        try {
+          const mod = await import("posthog-js");
+          __posthog = mod.default ?? mod;
+        } catch (e) {
+          console.warn("PostHog failed to load:", e);
+        }
+      }
+    };
+
+    const initIfConsented = async () => {
+      const { consentAccepted, analyticsEnabled } = getConsent();
+      if (!consentAccepted || !analyticsEnabled) {
+        if (__posthog) {
+          try {
+            __posthog.opt_out_capturing?.();
+          } catch {}
+        }
+        return;
+      }
+      await ensurePosthog();
+      if (!__posthog) return;
+
+      if (!__phLoaded) {
+        try {
+          __posthog.init(import.meta.env.VITE_POSTHOG_KEY as string, {
+            api_host:
+              (import.meta.env.VITE_POSTHOG_HOST as string) ||
+              "https://eu.i.posthog.com",
+            // Respect privacy & keep defaults minimal
+            capture_pageview: true,
+            autocapture: true,
+          });
+          __phLoaded = true;
+        } catch (e) {
+          console.warn("PostHog init failed:", e);
+        }
+      } else {
+        // If already loaded but user just opted-in, ensure capturing is enabled
+        try {
+          __posthog.opt_in_capturing?.();
+        } catch {}
+      }
+    };
+
+    // Patch localStorage.setItem to react instantly to consent changes
+    const originalSetItem = localStorage.setItem.bind(localStorage);
+    localStorage.setItem = (key: string, value: string) => {
+      originalSetItem(key, value);
+      if (
+        key === "cookieConsentAccepted" ||
+        key === "cookieConsentLevel"
+      ) {
+        // Update PostHog based on the new consent state
+        initIfConsented();
+      }
+    };
+
+    // Also listen to cross-tab updates
+    const onStorage = (e: StorageEvent) => {
+      if (
+        e.key === "cookieConsentAccepted" ||
+        e.key === "cookieConsentLevel"
+      ) {
+        initIfConsented();
+      }
+    };
+    window.addEventListener("storage", onStorage);
+
+    // Initial run
+    initIfConsented();
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener("storage", onStorage);
+      // Restore original setItem
+      try {
+        localStorage.setItem = originalSetItem;
+      } catch {}
+    };
+  }, []);
+
   return (
     <>
       <ErrorBoundary>{children}</ErrorBoundary>
@@ -236,3 +342,6 @@ export function InstrumentationProvider({
     </>
   );
 }
+
+let __phLoaded = false; // avoid double PostHog init
+let __posthog: any = null; // dynamic import holder for PostHog
