@@ -451,6 +451,30 @@ export default function Dashboard() {
   const handleUpdateExpense = async () => {
     if (!editExpenseId || !editForm.name || !editForm.amount) return;
     try {
+      // Enforce start date for recurring and default missing scheduling fields from start date
+      let timeOfDay = editForm.timeOfDay;
+      let monthlyDay = editForm.monthlyDay;
+      let annualMonth = editForm.annualMonth;
+      let annualDay = editForm.annualDay;
+
+      if (editForm.isRecurring) {
+        if (!editForm.startDate) {
+          toast.error("Start date is required for recurring expenses");
+          return;
+        }
+        const start = new Date(editForm.startDate);
+        if (editForm.frequency === "daily" && !timeOfDay) {
+          timeOfDay = `${String(start.getHours()).padStart(2, "0")}:${String(start.getMinutes()).padStart(2, "0")}`;
+        }
+        if (editForm.frequency === "monthly" && !monthlyDay) {
+          monthlyDay = String(start.getDate());
+        }
+        if (editForm.frequency === "annual") {
+          if (!annualMonth) annualMonth = String(start.getMonth() + 1);
+          if (!annualDay) annualDay = String(start.getDate());
+        }
+      }
+
       const payload: any = {
         id: editExpenseId,
         name: editForm.name,
@@ -463,17 +487,17 @@ export default function Dashboard() {
         frequency: editForm.isRecurring ? editForm.frequency : undefined,
       };
       if (editForm.isRecurring) {
-        if (editForm.frequency === "daily" && editForm.timeOfDay) {
-          const [hh, mm] = editForm.timeOfDay.split(":").map(Number);
+        if (editForm.frequency === "daily" && timeOfDay) {
+          const [hh, mm] = timeOfDay.split(":").map(Number);
           if (!isNaN(hh) && !isNaN(mm)) payload.timeOfDayMinutes = hh * 60 + mm;
         }
-        if (editForm.frequency === "monthly" && editForm.monthlyDay) {
-          const d = parseInt(editForm.monthlyDay, 10);
+        if (editForm.frequency === "monthly" && monthlyDay) {
+          const d = parseInt(monthlyDay, 10);
           if (!isNaN(d)) payload.monthlyDay = d;
         }
         if (editForm.frequency === "annual") {
-          const m = parseInt(editForm.annualMonth, 10);
-          const d = parseInt(editForm.annualDay, 10);
+          const m = annualMonth ? parseInt(annualMonth, 10) : NaN;
+          const d = annualDay ? parseInt(annualDay, 10) : NaN;
           if (!isNaN(m)) payload.annualMonth = m;
           if (!isNaN(d)) payload.annualDay = d;
         }
@@ -1113,7 +1137,20 @@ export default function Dashboard() {
                           {expense.tags.length > 0 && (
                             <div className="flex gap-1 mt-2">
                               {expense.tags.map((tag, index) => (
-                                <Badge key={index} variant="outline" className="text-xs">
+                                <Badge
+                                  key={index}
+                                  variant="outline"
+                                  className="text-xs cursor-pointer"
+                                  onClick={() => {
+                                    const clicked = (tag || "").toLowerCase();
+                                    setFilters((p) => ({
+                                      ...p,
+                                      tags: clicked,
+                                      person: expense.userId === user?._id ? "you" : "partner",
+                                    }));
+                                  }}
+                                  title={`Filter by tag "${tag}"`}
+                                >
                                   <Tag className="h-2 w-2 mr-1" />
                                   {tag}
                                 </Badge>
