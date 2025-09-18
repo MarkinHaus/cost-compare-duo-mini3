@@ -103,12 +103,40 @@ export const updateExpense = mutation({
     if (!user) throw new Error("Not authenticated");
 
     const existing = await ctx.db.get(args.id);
-    if (!existing || existing.userId !== user._id) {
+    if (!existing) {
+      throw new Error("Not found");
+    }
+
+    // Load room to check ownership
+    const room = await ctx.db
+      .query("rooms")
+      .withIndex("by_code", (q) => q.eq("code", existing.roomCode.toUpperCase()))
+      .unique();
+
+    if (!room) {
+      throw new Error("Room not found");
+    }
+
+    const isExpenseOwner = existing.userId === user._id;
+    const isRoomOwner = room.createdBy === user._id;
+
+    // Authorization: expense owner OR room owner can edit
+    if (!isExpenseOwner && !isRoomOwner) {
       throw new Error("Not authorized");
     }
 
     // Normalize tags to lowercase for consistent comparisons
     const normalizedTags = (args.tags || []).map((t) => t.trim().toLowerCase()).filter(Boolean);
+
+    // Determine owner override flag behavior
+    // - If room owner edits someone else's expense => set ownerOverrideEdit true
+    // - If original expense owner edits => clear ownerOverrideEdit
+    let ownerOverrideEdit: boolean | undefined = existing.ownerOverrideEdit;
+    if (isExpenseOwner) {
+      ownerOverrideEdit = false;
+    } else if (isRoomOwner && !isExpenseOwner) {
+      ownerOverrideEdit = true;
+    }
 
     // Build patch; clear recurrence-specific fields when not recurring
     const patch: Record<string, unknown> = {
@@ -126,6 +154,11 @@ export const updateExpense = mutation({
       annualDay: args.isRecurring ? args.annualDay ?? undefined : undefined,
       // beneficiaries can always be set explicitly
       beneficiaries: args.beneficiaries ?? existing.beneficiaries,
+
+      // NEW: audit fields for edits
+      lastEditedBy: user._id,
+      lastEditedAt: Date.now(),
+      ownerOverrideEdit,
     };
 
     await ctx.db.patch(args.id, patch);

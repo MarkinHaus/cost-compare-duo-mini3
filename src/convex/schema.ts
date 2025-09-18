@@ -77,6 +77,11 @@ const schema = defineSchema(
 
       // NEW: beneficiaries support for >2 member rooms
       beneficiaries: v.optional(v.array(v.id("users"))),
+
+      // NEW: owner override edit tracking
+      ownerOverrideEdit: v.optional(v.boolean()),
+      lastEditedBy: v.optional(v.id("users")),
+      lastEditedAt: v.optional(v.number()),
     })
       .index("by_room_code", ["roomCode"])
       .index("by_user", ["userId"])
