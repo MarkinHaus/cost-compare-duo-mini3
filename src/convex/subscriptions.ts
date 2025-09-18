@@ -74,15 +74,33 @@ export const upsertFromStripe = internalMutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db.get(args.userId);
     if (!existing) return;
-    await ctx.db.patch(args.userId, {
+
+    // Base patch
+    const patch: Record<string, any> = {
       premium: args.premium,
       plan: args.plan ?? existing.plan,
       billingCustomerId: args.billingCustomerId ?? existing.billingCustomerId,
       billingSubscriptionId: args.billingSubscriptionId ?? existing.billingSubscriptionId,
-      trialEnd: args.trialEnd ?? existing.trialEnd,
       cancelAtPeriodEnd: args.cancelAtPeriodEnd ?? existing.cancelAtPeriodEnd,
       billingProvider: args.billingProvider ?? existing.billingProvider,
-    });
+      trialEnd: args.trialEnd ?? existing.trialEnd,
+    };
+
+    // If Stripe marks user premium, clear any trial flags and mark provider as stripe
+    if (args.premium && (args.billingProvider === "stripe" || args.billingSubscriptionId)) {
+      patch.billingProvider = "stripe";
+      patch.trialEnd = undefined;
+    }
+
+    // If user is no longer premium (deleted/expired sub), clear plan/provider appropriately
+    if (!args.premium) {
+      // Preserve provenance: if moving off stripe, keep provider as "stripe" if subscription ids remain
+      patch.plan = undefined;
+      patch.cancelAtPeriodEnd = false;
+      // Leave billingProvider as-is unless explicitly provided
+    }
+
+    await ctx.db.patch(args.userId, patch);
   },
 });
 
@@ -151,6 +169,25 @@ export const downgradeToFreeAndPrune = mutation({
       plan: undefined,
       cancelAtPeriodEnd: false,
     });
+
+    return { ok: true };
+  },
+});
+
+// Add: finalizeSubscriptionReturn public mutation to call after Stripe success redirect
+export const finalizeSubscriptionReturn = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    // If user is premium, ensure trial is cleared and provider is set to stripe
+    if (user.premium) {
+      await ctx.db.patch(user._id, {
+        billingProvider: "stripe",
+        trialEnd: undefined,
+      });
+    }
 
     return { ok: true };
   },
