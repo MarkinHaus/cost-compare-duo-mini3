@@ -68,10 +68,21 @@ const schema = defineSchema(
       monthlyDay: v.optional(v.number()),       // for "monthly": day of month (1..31)
       annualMonth: v.optional(v.number()),      // for "annual": month (1..12)
       annualDay: v.optional(v.number()),        // for "annual": day of month (1..31)
+
+      // NEW: beneficiaries support for >2 member rooms
+      beneficiaries: v.optional(v.array(v.id("users"))),
     })
       .index("by_room_code", ["roomCode"])
       .index("by_user", ["userId"])
       .index("by_room_and_user", ["roomCode", "userId"]),
+
+    // NEW: simple app config table for plan settings
+    appConfig: defineTable({
+      key: v.string(),              // e.g., "pricing"
+      planName: v.string(),         // e.g., "pro"
+      planPriceCents: v.number(),   // e.g., 120
+      currency: v.string(),         // e.g., "usd"
+    }).index("by_key", ["key"]),
   },
   {
     schemaValidation: false,

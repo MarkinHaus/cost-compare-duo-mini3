@@ -13,7 +13,7 @@ export const startTrial = mutation({
       return;
     }
 
-    const trialEnd = Date.now() + (7 * 24 * 60 * 60 * 1000); // 7 days
+    const trialEnd = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
 
     await ctx.db.patch(user._id, {
       premium: true,
@@ -42,11 +42,18 @@ export const getMe = query({
   },
 });
 
-export const getCheckoutUrl = mutation({
+export const getPricing = query({
   args: {},
   handler: async (ctx) => {
-    // Placeholder for Autumn checkout integration
-    // For now, return a mock URL to keep app compiling
-    return "/pay";
+    const cfg = await ctx.db
+      .query("appConfig")
+      .withIndex("by_key", (q) => q.eq("key", "pricing"))
+      .unique();
+
+    return {
+      planName: cfg?.planName ?? "pro",
+      planPriceCents: cfg?.planPriceCents ?? 120,
+      currency: cfg?.currency ?? "usd",
+    };
   },
 });

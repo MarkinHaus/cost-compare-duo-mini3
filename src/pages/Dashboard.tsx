@@ -12,9 +12,10 @@ import { api } from "@/convex/_generated/api";
 import { useAuth } from "@/hooks/use-auth";
 import { motion } from "framer-motion";
 import { Plus, Copy, Users, TrendingUp, Calendar, Tag, Trash2, BarChart3, Pencil } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart";
@@ -43,6 +44,7 @@ export default function Dashboard() {
     annualMonth: "",
     annualDay: "",
   });
+  const [selectedBeneficiaries, setSelectedBeneficiaries] = useState<string[]>([]);
 
   // Form state
   const [expenseForm, setExpenseForm] = useState({
@@ -83,14 +85,22 @@ export default function Dashboard() {
   });
 
   const startTrial = useMutation(api.subscriptions.startTrial);
-  const getCheckoutUrl = useMutation(api.subscriptions.getCheckoutUrl);
+  const createPaymentLink = useAction(api.stripe.createPaymentLink);
   const userBilling = useQuery(api.subscriptions.getMe);
+  const pricing = useQuery(api.subscriptions.getPricing);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
       navigate("/auth");
     }
   }, [isLoading, isAuthenticated, navigate]);
+
+  useEffect(() => {
+    // Initialize beneficiaries to room members for >2 member rooms on open add dialog
+    if (userRoom && userRoom.members && userRoom.members.length > 2 && showAddExpense) {
+      setSelectedBeneficiaries(userRoom.members.map((m: any) => m));
+    }
+  }, [userRoom, showAddExpense]);
 
   if (isLoading) {
     return (
@@ -187,7 +197,16 @@ export default function Dashboard() {
         }
       }
 
+      if (userRoom && userRoom.members.length > 2) {
+        const beneficiaries = selectedBeneficiaries.filter(Boolean);
+        if (beneficiaries.length > 0) {
+          payload.beneficiaries = beneficiaries;
+        }
+      }
+
       await createExpense(payload);
+
+      setSelectedBeneficiaries([]);
 
       setExpenseForm({
         name: "",
@@ -237,12 +256,12 @@ export default function Dashboard() {
 
   const handleSubscribe = async () => {
     try {
-      const url = await getCheckoutUrl({});
-      if (url === "/pay") {
-        toast.info("Subscription coming soon");
-      } else {
-        window.location.href = url;
-      }
+      const url = await createPaymentLink({
+        amountCents: pricing?.planPriceCents ?? 120,
+        currency: pricing?.currency ?? "usd",
+        planName: pricing?.planName ?? "pro",
+      });
+      window.location.href = url;
     } catch (error) {
       toast.error("Failed to get checkout URL");
     }
@@ -398,6 +417,17 @@ export default function Dashboard() {
     return 0;
   }
 
+  // Helper to determine beneficiaries for an expense
+  function getBeneficiaries(e: any): string[] {
+    if (Array.isArray(e.beneficiaries) && e.beneficiaries.length > 0) return e.beneficiaries as string[];
+    // default: if room has >2, assume all members; otherwise treat as legacy (payer only)
+    if (userRoom && userRoom.members.length > 2) {
+      return userRoom.members as string[];
+    }
+    // legacy two-person mode: attribute to payer only
+    return [e.userId];
+  }
+
   // Compute date window from filters
   const fromMs = filters.fromDate ? new Date(filters.fromDate).getTime() : 0;
   const toMs = filters.toDate ? new Date(filters.toDate).getTime() : Date.now();
@@ -417,9 +447,16 @@ export default function Dashboard() {
     if (filters.name && !e.name.toLowerCase().includes(filters.name.toLowerCase())) {
       return false;
     }
-    // person filter
-    if (filters.person === "you" && e.userId !== user?._id) return false;
-    if (filters.person === "partner" && e.userId === user?._id) return false;
+    // person filter (based on beneficiaries in >2 mode, else payer)
+    const bens = getBeneficiaries(e);
+    if (filters.person === "you") {
+      const isYou = userRoom && userRoom.members.length > 2 ? bens.includes(user?._id as any) : e.userId === user?._id;
+      if (!isYou) return false;
+    }
+    if (filters.person === "partner") {
+      const isYou = userRoom && userRoom.members.length > 2 ? bens.includes(user?._id as any) : e.userId === user?._id;
+      if (isYou) return false;
+    }
     // type filter
     if (filters.type === "one-time" && e.isRecurring) return false;
     if (filters.type === "recurring" && !e.isRecurring) return false;
@@ -429,7 +466,7 @@ export default function Dashboard() {
       const hasAny = eTags.some((t: string) => tagFilterSet.has(t));
       if (!hasAny) return false;
     }
-    // date window: for recurring use window occurrences, for non-recurring check createdAt within window
+    // date window
     const count = countOccurrencesInWindow(e, fromMs, toMs);
     return count > 0;
   });
@@ -438,14 +475,26 @@ export default function Dashboard() {
   const myExpensesScoped = filteredExpenses.filter((e) => e.userId === user?._id);
   const partnerExpensesScoped = filteredExpenses.filter((e) => e.userId !== user?._id);
 
-  const myTotalScoped = myExpensesScoped.reduce((sum, e) => {
+  const myTotalScoped = filteredExpenses.reduce((sum, e) => {
     const count = countOccurrencesInWindow(e, fromMs, toMs);
-    return sum + e.amount * count;
+    if (count <= 0) return sum;
+    const bens = getBeneficiaries(e);
+    const share = bens.length > 0 ? e.amount / bens.length : e.amount;
+    const occursTotal = share * count;
+    const isMine = bens.includes(user?._id as any);
+    return sum + (isMine ? occursTotal : 0);
   }, 0);
 
-  const partnerTotalScoped = partnerExpensesScoped.reduce((sum, e) => {
+  const partnerTotalScoped = filteredExpenses.reduce((sum, e) => {
     const count = countOccurrencesInWindow(e, fromMs, toMs);
-    return sum + e.amount * count;
+    if (count <= 0) return sum;
+    const bens = getBeneficiaries(e);
+    const share = bens.length > 0 ? e.amount / bens.length : e.amount;
+    const occursTotal = share * count;
+    // For "partner", sum all beneficiary shares that are NOT me
+    const othersCount = bens.includes(user?._id as any) ? bens.length - 1 : bens.length;
+    const othersShareTotal = othersCount > 0 ? occursTotal * (othersCount) : 0;
+    return sum + othersShareTotal;
   }, 0);
 
   const scopedDifference = myTotalScoped - partnerTotalScoped;
@@ -502,6 +551,12 @@ export default function Dashboard() {
       annualMonth: expense.annualMonth ? String(expense.annualMonth) : "",
       annualDay: expense.annualDay ? String(expense.annualDay) : "",
     });
+    // Prefill beneficiaries if present
+    if (Array.isArray(expense.beneficiaries)) {
+      setSelectedBeneficiaries(expense.beneficiaries as string[]);
+    } else {
+      setSelectedBeneficiaries([]);
+    }
     setShowEditExpense(true);
   }
 
@@ -557,6 +612,12 @@ export default function Dashboard() {
           const d = annualDay ? parseInt(annualDay, 10) : NaN;
           if (!isNaN(m)) payload.annualMonth = m;
           if (!isNaN(d)) payload.annualDay = d;
+        }
+      }
+      if (userRoom && userRoom.members.length > 2) {
+        const beneficiaries = selectedBeneficiaries.filter(Boolean);
+        if (beneficiaries.length > 0) {
+          payload.beneficiaries = beneficiaries;
         }
       }
       await updateExpense(payload);
@@ -680,7 +741,7 @@ export default function Dashboard() {
                     </Button>
                   )}
                   <Button onClick={handleSubscribe}>
-                    Subscribe $1.20/mo
+                    Subscribe ${((pricing?.planPriceCents ?? 120) / 100).toFixed(2)}/mo
                   </Button>
                 </div>
                 {userBilling?.trialActive && (
@@ -1030,6 +1091,35 @@ export default function Dashboard() {
                             />
                           </div>
                         </div>
+
+                        {userRoom && userRoom.members.length > 2 && (
+                          <div className="space-y-2">
+                            <Label>Beneficiaries (who this expense is for)</Label>
+                            <div className="flex flex-wrap gap-3">
+                              {userRoom.members.map((memberId: string, idx: number) => {
+                                const checked = selectedBeneficiaries.includes(memberId);
+                                return (
+                                  <label key={memberId} className="flex items-center gap-2 border rounded px-2 py-1">
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={(isChecked: boolean) => {
+                                        setSelectedBeneficiaries((prev) => {
+                                          if (isChecked) {
+                                            if (prev.includes(memberId)) return prev;
+                                            return [...prev, memberId];
+                                          } else {
+                                            return prev.filter((id) => id !== memberId);
+                                          }
+                                        });
+                                      }}
+                                    />
+                                    <span className="text-sm">Member {idx + 1}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
 
@@ -1183,6 +1273,35 @@ export default function Dashboard() {
                             />
                           </div>
                         </div>
+
+                        {userRoom && userRoom.members.length > 2 && (
+                          <div className="space-y-2">
+                            <Label>Beneficiaries (who this expense is for)</Label>
+                            <div className="flex flex-wrap gap-3">
+                              {userRoom.members.map((memberId: string, idx: number) => {
+                                const checked = selectedBeneficiaries.includes(memberId);
+                                return (
+                                  <label key={memberId} className="flex items-center gap-2 border rounded px-2 py-1">
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={(isChecked: boolean) => {
+                                        setSelectedBeneficiaries((prev) => {
+                                          if (isChecked) {
+                                            if (prev.includes(memberId)) return prev;
+                                            return [...prev, memberId];
+                                          } else {
+                                            return prev.filter((id) => id !== memberId);
+                                          }
+                                        });
+                                      }}
+                                    />
+                                    <span className="text-sm">Member {idx + 1}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
 
@@ -1274,6 +1393,13 @@ export default function Dashboard() {
                             </div>
                           )}
                         </div>
+                        {Array.isArray(expense.beneficiaries) && userRoom && userRoom.members.length > 2 && (
+                          <div className="mt-1">
+                            <Badge variant="outline" className="text-xs">
+                              For {expense.beneficiaries.length} member{expense.beneficiaries.length !== 1 ? "s" : ""}
+                            </Badge>
+                          </div>
+                        )}
                       </motion.div>
                     ))}
                   </div>

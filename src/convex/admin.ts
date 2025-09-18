@@ -59,3 +59,61 @@ export const setUserPremium = mutation({
     });
   },
 });
+
+// NEW: getConfig (admin only)
+export const getConfig = query({
+  args: {},
+  handler: async (ctx) => {
+    const currentUser = await getCurrentUser(ctx);
+    if (!currentUser || currentUser.email !== ADMIN_EMAIL) {
+      throw new Error("Not authorized");
+    }
+    const existing = await ctx.db
+      .query("appConfig")
+      .withIndex("by_key", (q) => q.eq("key", "pricing"))
+      .unique();
+    // Return defaults if missing; do not write inside a query
+    if (!existing) {
+      return {
+        key: "pricing",
+        planName: "pro",
+        planPriceCents: 120,
+        currency: "usd",
+      };
+    }
+    return existing;
+  },
+});
+
+// NEW: setConfig (admin only)
+export const setConfig = mutation({
+  args: {
+    planName: v.string(),
+    planPriceCents: v.number(),
+    currency: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+    if (!currentUser || currentUser.email !== ADMIN_EMAIL) {
+      throw new Error("Not authorized");
+    }
+    const existing = await ctx.db
+      .query("appConfig")
+      .withIndex("by_key", (q) => q.eq("key", "pricing"))
+      .unique();
+    if (!existing) {
+      await ctx.db.insert("appConfig", {
+        key: "pricing",
+        planName: args.planName,
+        planPriceCents: args.planPriceCents,
+        currency: args.currency,
+      });
+    } else {
+      await ctx.db.patch(existing._id, {
+        planName: args.planName,
+        planPriceCents: args.planPriceCents,
+        currency: args.currency,
+      });
+    }
+  },
+});

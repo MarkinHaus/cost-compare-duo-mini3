@@ -8,11 +8,15 @@ import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import { Id } from "@/convex/_generated/dataModel";
 import type { Role } from "@/convex/schema";
+import { Input } from "@/components/ui/input";
+import { useEffect, useState } from "react";
 
 export default function Admin() {
   const users = useQuery(api.admin.listUsers);
   const setUserRole = useMutation(api.admin.setUserRole);
   const setUserPremium = useMutation(api.admin.setUserPremium);
+  const config = useQuery(api.admin.getConfig);
+  const setConfig = useMutation(api.admin.setConfig);
 
   const handleRoleChange = async (userId: Id<"users">, role: Role) => {
     try {
@@ -34,6 +38,27 @@ export default function Admin() {
       toast.success(`Premium ${premium ? "enabled" : "disabled"} successfully`);
     } catch (error) {
       toast.error("Failed to update premium status");
+    }
+  };
+
+  const [planName, setPlanName] = useState(config?.planName ?? "pro");
+  const [planPriceCents, setPlanPriceCents] = useState<number>(config?.planPriceCents ?? 120);
+  const [currency, setCurrency] = useState(config?.currency ?? "usd");
+
+  useEffect(() => {
+    if (config) {
+      setPlanName(config.planName);
+      setPlanPriceCents(config.planPriceCents);
+      setCurrency(config.currency);
+    }
+  }, [config]);
+
+  const handleSaveConfig = async () => {
+    try {
+      await setConfig({ planName, planPriceCents, currency });
+      toast.success("Pricing config saved");
+    } catch (e) {
+      toast.error("Failed to save config");
     }
   };
 
@@ -68,6 +93,33 @@ export default function Admin() {
 
         <Card>
           <CardHeader>
+            <CardTitle>Subscription Pricing</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm block mb-1">Plan Name</label>
+                <Input value={planName} onChange={(e) => setPlanName(e.target.value)} />
+              </div>
+              <div>
+                <label className="text-sm block mb-1">Price (cents)</label>
+                <Input
+                  type="number"
+                  value={planPriceCents}
+                  onChange={(e) => setPlanPriceCents(Number(e.target.value || 0))}
+                />
+              </div>
+              <div>
+                <label className="text-sm block mb-1">Currency</label>
+                <Input value={currency} onChange={(e) => setCurrency(e.target.value)} />
+              </div>
+            </div>
+            <Button onClick={handleSaveConfig}>Save Pricing</Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Users Management</CardTitle>
           </CardHeader>
           <CardContent>
@@ -78,9 +130,7 @@ export default function Admin() {
                     <div className="flex items-center gap-3">
                       <h3 className="font-medium">{user.name || "Unnamed"}</h3>
                       <Badge variant="outline">{user.email}</Badge>
-                      {user.premium && (
-                        <Badge variant="default">Premium</Badge>
-                      )}
+                      {user.premium && <Badge variant="default">Premium</Badge>}
                       {user.trialEnd && Date.now() < user.trialEnd && (
                         <Badge variant="secondary">Trial</Badge>
                       )}

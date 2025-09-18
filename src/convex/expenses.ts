@@ -19,13 +19,29 @@ export const create = mutation({
     monthlyDay: v.optional(v.number()),
     annualMonth: v.optional(v.number()),
     annualDay: v.optional(v.number()),
+
+    // NEW: beneficiaries array
+    beneficiaries: v.optional(v.array(v.id("users"))),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
+    // Default beneficiaries when room has >2 members and not explicitly set
+    let beneficiaries = args.beneficiaries;
+    if (!beneficiaries || beneficiaries.length === 0) {
+      const room = await ctx.db
+        .query("rooms")
+        .withIndex("by_code", (q) => q.eq("code", args.roomCode.toUpperCase()))
+        .unique();
+      if (room && room.members.length > 2) {
+        beneficiaries = room.members;
+      }
+    }
+
     return await ctx.db.insert("expenses", {
       ...args,
+      beneficiaries,
       userId: user._id,
       createdAt: Date.now(),
     });
@@ -75,6 +91,8 @@ export const updateExpense = mutation({
     monthlyDay: v.optional(v.number()),
     annualMonth: v.optional(v.number()),
     annualDay: v.optional(v.number()),
+    // NEW: beneficiaries
+    beneficiaries: v.optional(v.array(v.id("users"))),
   },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
@@ -99,6 +117,8 @@ export const updateExpense = mutation({
       monthlyDay: args.isRecurring ? args.monthlyDay ?? undefined : undefined,
       annualMonth: args.isRecurring ? args.annualMonth ?? undefined : undefined,
       annualDay: args.isRecurring ? args.annualDay ?? undefined : undefined,
+      // beneficiaries can always be set explicitly
+      beneficiaries: args.beneficiaries ?? existing.beneficiaries,
     };
 
     await ctx.db.patch(args.id, patch);
