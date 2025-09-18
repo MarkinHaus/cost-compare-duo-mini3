@@ -9,9 +9,12 @@ const ADMIN_EMAIL = "markinhausmanns@gmail.com";
 export const listUsers = query({
   args: {},
   handler: async (ctx) => {
-    const currentUser = await getCurrentUser(ctx);
-    if (!currentUser || currentUser.email !== ADMIN_EMAIL) {
-      throw new Error("Not authorized");
+    // Use auth identity directly to avoid any throws inside getCurrentUser
+    const identity = await ctx.auth.getUserIdentity();
+    const email = identity?.email ?? null;
+    if (!email || email !== ADMIN_EMAIL) {
+      // Return empty list instead of throwing to avoid client crash
+      return [];
     }
 
     const users = await ctx.db.query("users").collect();
@@ -64,14 +67,19 @@ export const setUserPremium = mutation({
 export const getConfig = query({
   args: {},
   handler: async (ctx) => {
-    const currentUser = await getCurrentUser(ctx);
-    if (!currentUser || currentUser.email !== ADMIN_EMAIL) {
-      throw new Error("Not authorized");
+    // Use auth identity directly to avoid any throws inside getCurrentUser
+    const identity = await ctx.auth.getUserIdentity();
+    const email = identity?.email ?? null;
+    if (!email || email !== ADMIN_EMAIL) {
+      // Return null instead of throwing to avoid client crash
+      return null;
     }
+
     const existing = await ctx.db
       .query("appConfig")
       .withIndex("by_key", (q) => q.eq("key", "pricing"))
       .unique();
+
     // Return defaults if missing; do not write inside a query
     if (!existing) {
       return {
