@@ -3,6 +3,8 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import { getCurrentUser } from "./users";
 /* removed unused internal import */
 
+import type { Doc, Id } from "./_generated/dataModel";
+
 export const startTrial = mutation({
   args: {},
   handler: async (ctx) => {
@@ -190,6 +192,74 @@ export const finalizeSubscriptionReturn = mutation({
     }
 
     return { ok: true };
+  },
+});
+
+/**
+ * Immediately downgrade the current user, delete all rooms they own and their expenses,
+ * and remove them from any other rooms. Idempotent and logs what it did.
+ */
+export const downgradeNowAuto = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) {
+      throw new Error("Not authenticated");
+    }
+
+    // Collect rooms once (no relying on missing indexes)
+    const allRooms: Array<Doc<"rooms">> = await ctx.db.query("rooms").collect();
+
+    const ownedRooms = allRooms.filter((r) => r.createdBy === user._id);
+    const memberRooms = allRooms.filter(
+      (r) => r.members.includes(user._id) && r.createdBy !== user._id
+    );
+
+    // Delete all owned rooms and their expenses
+    let deletedRooms = 0;
+    let deletedExpenses = 0;
+    for (const room of ownedRooms) {
+      const expenses = await ctx.db
+        .query("expenses")
+        .withIndex("by_room_code", (q) => q.eq("roomCode", room.code))
+        .collect();
+
+      for (const e of expenses) {
+        await ctx.db.delete(e._id);
+        deletedExpenses++;
+      }
+      await ctx.db.delete(room._id);
+      deletedRooms++;
+    }
+
+    // Remove user from any remaining rooms where they are only a member
+    let roomsLeft = 0;
+    for (const room of memberRooms) {
+      if (room.members.includes(user._id)) {
+        const nextMembers = room.members.filter((m: Id<"users">) => m !== user._id);
+        await ctx.db.patch(room._id, { members: nextMembers });
+        roomsLeft++;
+      }
+    }
+
+    // Downgrade the user immediately
+    await ctx.db.patch(user._id, {
+      premium: false,
+      plan: null as any,
+      cancelAtPeriodEnd: false,
+      // Keep billingProvider/billing ids as-is for audit; trialEnd cleared
+      trialEnd: undefined,
+    });
+
+    // Simple audit log to Convex logs
+    console.log("cancel_now", {
+      userId: user._id,
+      deletedRooms,
+      deletedExpenses,
+      roomsLeft,
+    });
+
+    return { deletedRooms, deletedExpenses, roomsLeft };
   },
 });
 

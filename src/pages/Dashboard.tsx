@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend, PieChart, Pie, Cell } from "recharts";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export default function Dashboard() {
   const { isLoading, isAuthenticated, user, signOut } = useAuth();
@@ -133,6 +134,8 @@ export default function Dashboard() {
   const cancelAtPeriodEnd = useAction(api.subscriptions_actions.cancelAtPeriodEnd);
   const userBilling = useQuery(api.subscriptions.getMe);
   const pricing = useQuery(api.subscriptions.getPricing);
+  const [showCancelNow, setShowCancelNow] = useState(false);
+  const cancelNowAction = useAction(api.subscriptions_actions.cancelNow);
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
@@ -1878,6 +1881,54 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
+
+        {userBilling?.premium ? (
+          <div className="mt-8 border rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold text-red-700 dark:text-red-300">Danger Zone</h3>
+                <p className="text-sm text-muted-foreground">
+                  Immediate cancellation will revoke premium and delete your owned rooms.
+                </p>
+              </div>
+              <Button variant="destructive" onClick={() => setShowCancelNow(true)}>
+                Cancel Now
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <AlertDialog open={showCancelNow} onOpenChange={setShowCancelNow}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancel Premium Now?</AlertDialogTitle>
+              <AlertDialogDescription>
+                If you cancel now, your premium access will end immediately. All rooms you own will be deleted, and you will lose access to any other rooms you are a member of. This action cannot be undone. Do you want to continue?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowCancelNow(false)}>
+                Keep Premium
+              </AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-red-600 hover:bg-red-700 text-white"
+                onClick={async () => {
+                  try {
+                    await cancelNowAction({});
+                    // Close the dialog and rely on reactive queries to refresh the UI,
+                    // which will hide premium-only panels and detach from deleted rooms.
+                    setShowCancelNow(false);
+                  } catch (e) {
+                    // no toast here to keep minimal; existing error handling/notifications apply
+                    setShowCancelNow(false);
+                  }
+                }}
+              >
+                Confirm & Cancel Premium
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
 
       {/* Add: Print-only report layout */}
