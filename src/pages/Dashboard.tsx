@@ -1889,7 +1889,16 @@ export default function Dashboard() {
                 <tbody>
                   {sortedExpenses.map((e) => (
                     <tr key={e._id}>
-                      <td className="border-b py-2 pr-2">{e.name}</td>
+                      <td className="border-b py-2 pr-2">
+                        <span className="whitespace-nowrap">
+                          {e.name}
+                          {e.ownerOverrideEdit ? (
+                            <span className="ml-2 text-[10px] text-red-600 print:text-black">
+                              (owner edit)
+                            </span>
+                          ) : null}
+                        </span>
+                      </td>
                       <td className="border-b py-2 pr-2">{userLabel(e.userId as any)}</td>
                       <td className="border-b py-2 pr-2">{(e.tags || []).join(", ") || "—"}</td>
                       <td className="border-b py-2 pr-2">
