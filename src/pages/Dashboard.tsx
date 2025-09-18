@@ -19,7 +19,7 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart";
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend } from "recharts";
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend, PieChart, Pie, Cell } from "recharts";
 
 export default function Dashboard() {
   const { isLoading, isAuthenticated, user, signOut } = useAuth();
@@ -32,6 +32,8 @@ export default function Dashboard() {
   const [newRoomCurrency, setNewRoomCurrency] = useState<string>("USD");
   const [joinCode, setJoinCode] = useState("");
   const [sortBy, setSortBy] = useState("date");
+  // Add: chart type selector state
+  const [chartType, setChartType] = useState<"bar" | "pie">("bar");
   const [showEditExpense, setShowEditExpense] = useState(false);
   const [editExpenseId, setEditExpenseId] = useState<Id<"expenses"> | null>(null);
   const [editForm, setEditForm] = useState({
@@ -456,7 +458,7 @@ export default function Dashboard() {
   // Add: determine report type based on whether the selected window goes beyond "today"
   const nowMs = Date.now();
   const isForecast = toMs > nowMs;
-  const reportType = isForecast ? "Analyse & Prognose" : "Steuererklärung";
+  const reportType = isForecast ? "Analysis & Forecast" : "Report";
 
   // Parse tags filter into a set
   const tagFilterSet = new Set(
@@ -556,6 +558,21 @@ export default function Dashboard() {
     you: Number(vals.you.toFixed(2)),
     partner: Number(vals.partner.toFixed(2)),
   }));
+  // Add: pie data and colors
+  const pieData = chartData.map((d) => ({
+    name: d.tag,
+    value: d.you + d.partner,
+  }));
+  const PIE_COLORS: string[] = [
+    "oklch(70% 0.16 30)",
+    "oklch(70% 0.16 70)",
+    "oklch(70% 0.16 110)",
+    "oklch(70% 0.16 150)",
+    "oklch(70% 0.16 190)",
+    "oklch(70% 0.16 230)",
+    "oklch(70% 0.16 270)",
+    "oklch(70% 0.16 310)",
+  ];
 
   // helper to open edit dialog prefilled
   function openEditDialog(expense: any) {
@@ -1009,6 +1026,17 @@ export default function Dashboard() {
                     <SelectItem value="date">Date</SelectItem>
                     <SelectItem value="amount">Amount</SelectItem>
                     <SelectItem value="name">Name</SelectItem>
+                  </SelectContent>
+                </Select>
+                {/* Add: Chart type selector */}
+                <Label htmlFor="chart-type" className="ml-2">Chart:</Label>
+                <Select value={chartType} onValueChange={(v) => setChartType(v as "bar" | "pie")}>
+                  <SelectTrigger id="chart-type" className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bar">Bar</SelectItem>
+                    <SelectItem value="pie">Pie</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1513,15 +1541,24 @@ export default function Dashboard() {
                       partner: { label: "Partner", color: "oklch(65% 0.2 40)" },
                     }}
                   >
-                    <BarChart data={chartData} margin={{ left: 8, right: 8 }}>
-                      <CartesianGrid vertical={false} strokeDasharray="3 3" />
-                      <XAxis dataKey="tag" />
-                      <YAxis />
-                      <RechartsTooltip content={<ChartTooltipContent />} />
-                      <RechartsLegend content={<ChartLegendContent />} />
-                      <Bar dataKey="you" fill="var(--color-you)" radius={4} />
-                      <Bar dataKey="partner" fill="var(--color-partner)" radius={4} />
-                    </BarChart>
+                    {chartType === "bar" ? (
+                      <BarChart data={chartData} margin={{ left: 8, right: 8 }}>
+                        <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                        <XAxis dataKey="tag" />
+                        <YAxis />
+                        <RechartsTooltip content={<ChartTooltipContent />} />
+                        <RechartsLegend content={<ChartLegendContent />} />
+                        <Bar dataKey="you" fill="var(--color-you)" radius={4} />
+                        <Bar dataKey="partner" fill="var(--color-partner)" radius={4} />
+                      </BarChart>
+                    ) : (
+                      <PieChart>
+                        <Pie data={chartData} dataKey="you" nameKey="tag" cx="50%" cy="50%" outerRadius={80} innerRadius={60} fill="#8884d8" />
+                        <Pie data={chartData} dataKey="partner" nameKey="tag" cx="50%" cy="50%" outerRadius={80} innerRadius={60} fill="#82ca9d" />
+                        <Cell key="you" fill="#8884d8" />
+                        <Cell key="partner" fill="#82ca9d" />
+                      </PieChart>
+                    )}
                   </ChartContainer>
                 )}
               </CardContent>
@@ -1535,13 +1572,13 @@ export default function Dashboard() {
         <div className="max-w-5xl mx-auto space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">ExpenseSync – Bericht</h1>
+              <h1 className="text-2xl font-bold tracking-tight">ExpenseSync – Report</h1>
               <p className="text-sm text-muted-foreground">
-                Generiert am {new Date().toLocaleString()}
+                Generated on {new Date().toLocaleString()}
               </p>
             </div>
             <div className="text-right">
-              <p className="text-sm text-muted-foreground">Berichtstyp</p>
+              <p className="text-sm text-muted-foreground">Report Type</p>
               <p className="text-lg font-semibold">{reportType}</p>
             </div>
           </div>
@@ -1549,10 +1586,10 @@ export default function Dashboard() {
           <div className="border rounded-md p-4">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-sm text-muted-foreground">Zeitraum</p>
+                <p className="text-sm text-muted-foreground">Period</p>
                 <p className="font-medium">
                   {filters.fromDate ? new Date(filters.fromDate).toLocaleDateString() : "—"}{" "}
-                  bis{" "}
+                  to{" "}
                   {filters.toDate ? new Date(filters.toDate).toLocaleDateString() : new Date().toLocaleDateString()}
                 </p>
               </div>
@@ -1566,7 +1603,7 @@ export default function Dashboard() {
                   <p className="text-xl font-semibold">{currencySymbol}{partnerTotalScoped.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Differenz</p>
+                  <p className="text-sm text-muted-foreground">Difference</p>
                   <p className="text-xl font-semibold">
                     {currencySymbol}{Math.abs(scopedDifference).toFixed(2)} {scopedDifference >= 0 ? "(You)" : "(Partner)"}
                   </p>
@@ -1574,14 +1611,64 @@ export default function Dashboard() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Dieser Bericht basiert auf dem aktuell gewählten Zeitraum und den gesetzten Filtern.
+              This report is based on the current date range and filters.
             </p>
           </div>
 
+          {/* Add: Print chart (matches user-selected chart type) */}
+          <div className="border rounded-md p-4">
+            <h2 className="text-lg font-semibold mb-2">Tag Comparison (Scoped)</h2>
+            {chartData.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No data in the selected scope.</p>
+            ) : chartType === "bar" ? (
+              <ChartContainer
+                className="w-full"
+                config={{
+                  you: { label: "You", color: "oklch(65% 0.2 170)" },
+                  partner: { label: "Partner", color: "oklch(65% 0.2 40)" },
+                }}
+              >
+                <BarChart data={chartData} margin={{ left: 8, right: 8 }}>
+                  <CartesianGrid vertical={false} strokeDasharray="3 3" />
+                  <XAxis dataKey="tag" />
+                  <YAxis />
+                  <RechartsTooltip content={<ChartTooltipContent />} />
+                  <RechartsLegend content={<ChartLegendContent />} />
+                  <Bar dataKey="you" fill="var(--color-you)" radius={4} />
+                  <Bar dataKey="partner" fill="var(--color-partner)" radius={4} />
+                </BarChart>
+              </ChartContainer>
+            ) : (
+              <div className="w-full">
+                <PieChart width={700} height={380}>
+                  <RechartsTooltip />
+                  <RechartsLegend />
+                  <Pie
+                    data={pieData}
+                    dataKey="value"
+                    nameKey="name"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={150}
+                    innerRadius={70}
+                    paddingAngle={2}
+                    stroke="hsl(var(--border))"
+                    strokeWidth={1}
+                    label={(entry) => `${entry.name}`}
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`print-cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </div>
+            )}
+          </div>
+
           <div>
-            <h2 className="text-lg font-semibold mb-2">Ausgaben (gefiltert)</h2>
+            <h2 className="text-lg font-semibold mb-2">Expenses (filtered)</h2>
             {sortedExpenses.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Keine Ausgaben im gewählten Zeitraum.</p>
+              <p className="text-sm text-muted-foreground">No expenses in the selected period.</p>
             ) : (
               <table className="w-full border-collapse text-sm">
                 <thead>
@@ -1589,8 +1676,8 @@ export default function Dashboard() {
                     <th className="border-b text-left py-2">Name</th>
                     <th className="border-b text-left py-2">Person</th>
                     <th className="border-b text-left py-2">Tags</th>
-                    <th className="border-b text-left py-2">Typ</th>
-                    <th className="border-b text-right py-2">Betrag</th>
+                    <th className="border-b text-left py-2">Type</th>
+                    <th className="border-b text-right py-2">Amount</th>
                   </tr>
                 </thead>
                 <tbody>
