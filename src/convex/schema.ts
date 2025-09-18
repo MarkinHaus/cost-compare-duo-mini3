@@ -32,12 +32,31 @@ const schema = defineSchema(
       role: v.optional(roleValidator), // role of the user. do not remove
     }).index("email", ["email"]), // index for the email. do not remove or modify
 
-    // add other tables here
+    rooms: defineTable({
+      code: v.string(),
+      createdBy: v.id("users"),
+      members: v.array(v.id("users")),
+      createdAt: v.number(),
+    })
+      .index("by_code", ["code"])
+      .index("by_member", ["members"]),
 
-    // tableName: defineTable({
-    //   ...
-    //   // table fields
-    // }).index("by_field", ["field"])
+    expenses: defineTable({
+      roomCode: v.string(),
+      userId: v.id("users"),
+      name: v.string(),
+      amount: v.number(),
+      purpose: v.string(),
+      tags: v.array(v.string()),
+      isRecurring: v.boolean(),
+      startDate: v.optional(v.number()),
+      endDate: v.optional(v.number()),
+      frequency: v.optional(v.string()),
+      createdAt: v.number(),
+    })
+      .index("by_room_code", ["roomCode"])
+      .index("by_user", ["userId"])
+      .index("by_room_and_user", ["roomCode", "userId"]),
   },
   {
     schemaValidation: false,
