@@ -40,27 +40,62 @@ if ("serviceWorker" in navigator) {
 // Handle PWA install prompt across browsers
 (function setupInstallPrompt() {
   let deferredPrompt: any = null;
+  let installBtn: HTMLButtonElement | null = null;
+
+  function removeInstallButton() {
+    if (installBtn && installBtn.parentElement) {
+      installBtn.parentElement.removeChild(installBtn);
+    }
+    installBtn = null;
+  }
+
+  function showInstallCTA() {
+    if (installBtn) return; // already showing
+    installBtn = document.createElement("button");
+    installBtn.textContent = "Install App";
+    installBtn.setAttribute("aria-label", "Install App");
+    installBtn.style.position = "fixed";
+    installBtn.style.right = "16px";
+    installBtn.style.bottom = "16px";
+    installBtn.style.zIndex = "9999";
+    installBtn.style.padding = "10px 14px";
+    installBtn.style.borderRadius = "9999px";
+    installBtn.style.border = "1px solid rgba(0,0,0,0.1)";
+    installBtn.style.background = "oklch(0.75 0.1 250 / 0.9)";
+    installBtn.style.color = "black";
+    installBtn.style.boxShadow = "0 4px 12px rgba(0,0,0,0.15)";
+    installBtn.style.cursor = "pointer";
+    installBtn.style.fontSize = "14px";
+
+    installBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) return;
+      try {
+        // @ts-ignore
+        deferredPrompt.prompt();
+        // @ts-ignore
+        await deferredPrompt.userChoice?.then?.(() => {});
+      } catch (e) {
+        console.warn("Install prompt failed:", e);
+      } finally {
+        deferredPrompt = null;
+        removeInstallButton();
+      }
+    });
+
+    document.body.appendChild(installBtn);
+  }
 
   window.addEventListener("beforeinstallprompt", (e: Event) => {
+    // Prevent the mini-infobar and store the event for later
     e.preventDefault();
     // @ts-ignore
     deferredPrompt = e;
-    // Simple UX: ask user via confirm; browser prompt shown on accept
-    const wantsInstall = window.confirm(
-      "Install Cost Compare Duo mini for a better experience?"
-    );
-    if (wantsInstall && deferredPrompt) {
-      // @ts-ignore
-      deferredPrompt.prompt();
-      // @ts-ignore
-      deferredPrompt.userChoice?.then?.(() => {
-        deferredPrompt = null;
-      });
-    }
+    showInstallCTA();
   });
 
   window.addEventListener("appinstalled", () => {
     deferredPrompt = null;
+    removeInstallButton();
     console.log("PWA installed");
   });
 })();
