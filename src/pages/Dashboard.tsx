@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
@@ -468,6 +468,20 @@ export default function Dashboard() {
     return shortId;
   }
 
+  // Add: palette for per-user bar colors (fallback loop)
+  const MEMBER_COLORS: Array<string> = [
+    "#2563eb", // blue-600
+    "#16a34a", // green-600
+    "#dc2626", // red-600
+    "#f59e0b", // amber-500
+    "#7c3aed", // violet-600
+    "#0ea5e9", // sky-500
+    "#d946ef", // fuchsia-500
+    "#10b981", // emerald-500
+    "#ef4444", // red-500
+    "#eab308", // yellow-500
+  ];
+
   // Compute date window from filters
   const fromMs = filters.fromDate ? new Date(filters.fromDate).getTime() : 0;
   const toMs = filters.toDate ? new Date(filters.toDate).getTime() : Date.now();
@@ -516,33 +530,61 @@ export default function Dashboard() {
     return count > 0;
   });
 
+  // Add: compute scoped totals by member using beneficiaries and recurrence
+  function computeMemberScopedTotals(
+    expenses: Array<any>,
+    memberIds: Array<string>,
+    meId: string,
+    fromMs: number,
+    toMs: number,
+    getOccurrences: (e: any, fromMs: number, toMs: number) => number,
+    getBeneficiariesFn: (e: any) => Array<string>
+  ) {
+    const totals: Record<string, number> = {};
+    for (const id of memberIds) totals[id] = 0;
+
+    for (const e of expenses) {
+      const occ = getOccurrences(e, fromMs, toMs);
+      if (occ <= 0) continue;
+
+      const bens = getBeneficiariesFn(e);
+      const share = bens.length > 0 ? e.amount / bens.length : e.amount;
+
+      for (const b of bens) {
+        if (!(b in totals)) continue;
+        totals[b] += share * occ;
+      }
+    }
+
+    const myTotal = totals[meId] ?? 0;
+    const others: Array<{ id: string; total: number; diffVsMe: number }> = [];
+    for (const id of memberIds) {
+      if (id === meId) continue;
+      const t = totals[id] ?? 0;
+      others.push({ id, total: t, diffVsMe: Math.abs(myTotal - t) });
+    }
+    return { totals, myTotal, others };
+  }
+
   // Scoped totals using filtered list and window-aware accumulation
-  const myExpensesScoped = filteredExpenses.filter((e) => e.userId === user?._id);
-  const partnerExpensesScoped = filteredExpenses.filter((e) => e.userId !== user?._id);
+  const memberIds = (userRoom?.members ?? []) as Array<string>;
+  const meId = user?._id as string;
+  const scopedTotalsComputed = computeMemberScopedTotals(
+    filteredExpenses,
+    memberIds,
+    meId,
+    fromMs,
+    toMs,
+    countOccurrencesInWindow,
+    getBeneficiaries
+  );
+  const myTotalScoped = scopedTotalsComputed.myTotal;
+  const otherMembersScoped = scopedTotalsComputed.others;
 
-  const myTotalScoped = filteredExpenses.reduce((sum, e) => {
-    const count = countOccurrencesInWindow(e, fromMs, toMs);
-    if (count <= 0) return sum;
-    const bens = getBeneficiaries(e);
-    const share = bens.length > 0 ? e.amount / bens.length : e.amount;
-    const occursTotal = share * count;
-    const isMine = bens.includes(user?._id as any);
-    return sum + (isMine ? occursTotal : 0);
-  }, 0);
+  // Also compute combined total if needed
+  const combinedTotalScoped = myTotalScoped + otherMembersScoped.reduce((s, o) => s + o.total, 0);
 
-  const partnerTotalScoped = filteredExpenses.reduce((sum, e) => {
-    const count = countOccurrencesInWindow(e, fromMs, toMs);
-    if (count <= 0) return sum;
-    const bens = getBeneficiaries(e);
-    const share = bens.length > 0 ? e.amount / bens.length : e.amount;
-    const occursTotal = share * count;
-    // For "partner", sum all beneficiary shares that are NOT me
-    const othersCount = bens.includes(user?._id as any) ? bens.length - 1 : bens.length;
-    const othersShareTotal = othersCount > 0 ? occursTotal * (othersCount) : 0;
-    return sum + othersShareTotal;
-  }, 0);
-
-  const scopedDifference = myTotalScoped - partnerTotalScoped;
+  const scopedDifference = myTotalScoped - otherMembersScoped.reduce((s, o) => s + o.total, 0);
 
   // Sort expenses
   const sortedExpenses = filteredExpenses.sort((a, b) => {
@@ -556,30 +598,47 @@ export default function Dashboard() {
     }
   });
 
-  // Build data for chart: compare by tag within scope
-  const tagSums: Record<string, { you: number; partner: number }> = {};
+  // Build per-user tag data (1..n members) for Bar chart, and combined totals for Pie chart
+  const memberIdOrder: Array<string> = (userRoom?.members ?? []) as Array<string>;
+  const memberLabels: Array<string> = memberIdOrder.map((id) => userLabel(id));
+  // Dynamic legend/tooltip config for ChartContainer
+  const chartConfig: Record<string, { label: string; color: string }> = {};
+  memberLabels.forEach((label, idx) => {
+    chartConfig[label] = { label, color: MEMBER_COLORS[idx % MEMBER_COLORS.length] };
+  });
+
+  // Map: tag -> { [userLabel]: totalAmountInScope }
+  const tagMap: Record<string, Record<string, number>> = {};
   for (const e of filteredExpenses) {
     const count = countOccurrencesInWindow(e, fromMs, toMs);
     if (count <= 0) continue;
-    const tags = e.tags && e.tags.length > 0 ? e.tags : ["untagged"];
-    const amt = e.amount * count;
-    for (const t of tags) {
-      const key = t.toLowerCase();
-      if (!tagSums[key]) tagSums[key] = { you: 0, partner: 0 };
-      if (e.userId === user?._id) tagSums[key].you += amt;
-      else tagSums[key].partner += amt;
+    const tags = (e.tags && e.tags.length > 0 ? e.tags : ["untagged"]).map((t: string) => t.toLowerCase());
+    const beneficiaries = getBeneficiaries(e);
+    const share = beneficiaries.length > 0 ? (e.amount * count) / beneficiaries.length : e.amount * count;
+    for (const tag of tags) {
+      if (!tagMap[tag]) tagMap[tag] = {};
+      for (const uid of beneficiaries) {
+        const label = userLabel(uid);
+        tagMap[tag][label] = (tagMap[tag][label] ?? 0) + share;
+      }
     }
   }
-  const chartData = Object.entries(tagSums).map(([tag, vals]) => ({
-    tag,
-    you: Number(vals.you.toFixed(2)),
-    partner: Number(vals.partner.toFixed(2)),
-  }));
-  // Add: pie data and colors
-  const pieData = chartData.map((d) => ({
-    name: d.tag,
-    value: d.you + d.partner,
-  }));
+
+  // Recharts dataset: [{ tag, <userLabel1>: n, <userLabel2>: m, ... }, ...]
+  const chartData = Object.entries(tagMap).map(([tag, perUser]) => {
+    const row: Record<string, any> = { tag };
+    for (const label of memberLabels) {
+      row[label] = Number((perUser[label] ?? 0).toFixed(2));
+    }
+    return row;
+  });
+
+  // Pie data: combined total per tag
+  const pieData = chartData.map((d) => {
+    let sum = 0;
+    for (const label of memberLabels) sum += d[label] ?? 0;
+    return { name: d.tag, value: sum };
+  });
   const PIE_COLORS: string[] = [
     "oklch(70% 0.16 30)",
     "oklch(70% 0.16 70)",
@@ -962,7 +1021,7 @@ export default function Dashboard() {
                       <span className="font-medium">You:</span> {currencySymbol}{myTotalScoped.toFixed(2)}
                     </div>
                     <div className="text-sm">
-                      <span className="font-medium">Partner:</span> {currencySymbol}{partnerTotalScoped.toFixed(2)}
+                      <span className="font-medium">Partner:</span> {currencySymbol}{otherMembersScoped.reduce((s, o) => s + o.total, 0).toFixed(2)}
                     </div>
                     <div className="text-sm">
                       <span className="font-medium">Difference:</span>{" "}
@@ -1000,7 +1059,7 @@ export default function Dashboard() {
                     <TrendingUp className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium">Partner Total</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">{currencySymbol}{partnerTotalScoped.toFixed(2)}</p>
+                  <p className="text-2xl font-bold mt-2">{currencySymbol}{otherMembersScoped.reduce((s, o) => s + o.total, 0).toFixed(2)}</p>
                 </CardContent>
               </Card>
 
@@ -1010,7 +1069,7 @@ export default function Dashboard() {
                     <BarChart3 className="h-4 w-4 text-purple-600" />
                     <span className="text-sm font-medium">Combined Total</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">{currencySymbol}{(myTotalScoped + partnerTotalScoped).toFixed(2)}</p>
+                  <p className="text-2xl font-bold mt-2">{currencySymbol}{combinedTotalScoped.toFixed(2)}</p>
                 </CardContent>
               </Card>
 
@@ -1021,11 +1080,75 @@ export default function Dashboard() {
                     <span className="text-sm font-medium">Difference</span>
                   </div>
                   <p className="text-2xl font-bold mt-2">{currencySymbol}{Math.abs(scopedDifference).toFixed(2)}</p>
-                  {myTotalScoped > partnerTotalScoped && (
+                  {myTotalScoped > otherMembersScoped.reduce((s, o) => s + o.total, 0) && (
                     <p className="text-xs text-muted-foreground mt-1">You spend more</p>
                   )}
-                  {partnerTotalScoped > myTotalScoped && (
+                  {otherMembersScoped.reduce((s, o) => s + o.total, 0) > myTotalScoped && (
                     <p className="text-xs text-muted-foreground mt-1">Partner spends more</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle>Members</CardTitle>
+                  <CardDescription>Totals in this scope</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {otherMembersScoped.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No other members</div>
+                  ) : (
+                    otherMembersScoped.map((m, idx) => (
+                      <div key={m.id} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-3 w-3 rounded-full"
+                            style={{ backgroundColor: MEMBER_COLORS[idx % MEMBER_COLORS.length] }}
+                          />
+                          <span className="text-sm font-medium">{userLabel(m.id)}</span>
+                        </div>
+                        <div className="text-sm font-semibold">
+                          {currencySymbol}{m.total.toFixed(2)}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="shadow-sm">
+                <CardHeader>
+                  <CardTitle>Differences</CardTitle>
+                  <CardDescription>Compared to You</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {otherMembersScoped.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">No differences to show</div>
+                  ) : (
+                    otherMembersScoped.map((m, idx) => {
+                      const otherMore = m.total > myTotalScoped;
+                      const diff = Math.abs(myTotalScoped - m.total);
+                      return (
+                        <div key={m.id} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-3 w-3 rounded-full"
+                              style={{ backgroundColor: MEMBER_COLORS[idx % MEMBER_COLORS.length] }}
+                            />
+                            <span className="text-sm font-medium">
+                              {otherMore ? `${userLabel(m.id)} spends more` : `You spend more vs ${userLabel(m.id)}`}
+                            </span>
+                          </div>
+                          <div className={`text-sm font-semibold ${otherMore ? "text-red-600" : "text-emerald-600"}`}>
+                            {otherMore ? "+" : "-"}
+                            {currencySymbol}{diff.toFixed(2)}
+                          </div>
+                        </div>
+                      );
+                    })
                   )}
                 </CardContent>
               </Card>
@@ -1553,10 +1676,7 @@ export default function Dashboard() {
                 ) : (
                   <ChartContainer
                     className="w-full"
-                    config={{
-                      you: { label: "You", color: "oklch(65% 0.2 170)" },
-                      partner: { label: "Partner", color: "oklch(65% 0.2 40)" },
-                    }}
+                    config={chartConfig}
                   >
                     {chartType === "bar" ? (
                       <BarChart data={chartData} margin={{ left: 8, right: 8 }}>
@@ -1565,8 +1685,15 @@ export default function Dashboard() {
                         <YAxis />
                         <RechartsTooltip content={<ChartTooltipContent />} />
                         <RechartsLegend content={<ChartLegendContent />} />
-                        <Bar dataKey="you" fill="var(--color-you)" radius={4} />
-                        <Bar dataKey="partner" fill="var(--color-partner)" radius={4} />
+                        {memberIds.map((id, idx) => (
+                          <Bar
+                            key={id}
+                            dataKey={userLabel(id)}
+                            stackId={undefined} // not stacking; separate bars per tag
+                            fill={MEMBER_COLORS[idx % MEMBER_COLORS.length]}
+                            radius={[4, 4, 0, 0]}
+                          />
+                        ))}
                       </BarChart>
                     ) : (
                       <PieChart>
@@ -1617,7 +1744,7 @@ export default function Dashboard() {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Partner</p>
-                  <p className="text-xl font-semibold">{currencySymbol}{partnerTotalScoped.toFixed(2)}</p>
+                  <p className="text-xl font-semibold">{currencySymbol}{otherMembersScoped.reduce((s, o) => s + o.total, 0).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Difference</p>
@@ -1640,10 +1767,7 @@ export default function Dashboard() {
             ) : chartType === "bar" ? (
               <ChartContainer
                 className="w-full"
-                config={{
-                  you: { label: "You", color: "oklch(65% 0.2 170)" },
-                  partner: { label: "Partner", color: "oklch(65% 0.2 40)" },
-                }}
+                config={chartConfig}
               >
                 <BarChart data={chartData} margin={{ left: 8, right: 8 }}>
                   <CartesianGrid vertical={false} strokeDasharray="3 3" />
@@ -1651,8 +1775,15 @@ export default function Dashboard() {
                   <YAxis />
                   <RechartsTooltip content={<ChartTooltipContent />} />
                   <RechartsLegend content={<ChartLegendContent />} />
-                  <Bar dataKey="you" fill="var(--color-you)" radius={4} />
-                  <Bar dataKey="partner" fill="var(--color-partner)" radius={4} />
+                  {memberIds.map((id, idx) => (
+                    <Bar
+                      key={id}
+                      dataKey={userLabel(id)}
+                      stackId={undefined} // not stacking; separate bars per tag
+                      fill={MEMBER_COLORS[idx % MEMBER_COLORS.length]}
+                      radius={[4, 4, 0, 0]}
+                    />
+                  ))}
                 </BarChart>
               </ChartContainer>
             ) : (
