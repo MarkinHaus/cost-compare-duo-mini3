@@ -14,6 +14,19 @@ import NotFound from "./pages/NotFound.tsx";
 import Admin from "./pages/Admin.tsx";
 import "./types/global.d.ts";
 
+const storedTheme = (() => {
+  try {
+    return localStorage.getItem("theme");
+  } catch {
+    return null;
+  }
+})();
+if (storedTheme === "dark") {
+  document.documentElement.classList.add("dark");
+} else if (storedTheme === "light") {
+  document.documentElement.classList.remove("dark");
+}
+
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
 function RouteSyncer() {
