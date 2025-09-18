@@ -1746,20 +1746,65 @@ export default function Dashboard() {
                   {filters.toDate ? new Date(filters.toDate).toLocaleDateString() : new Date().toLocaleDateString()}
                 </p>
               </div>
-              <div className="flex items-center gap-8">
-                <div>
-                  <p className="text-sm text-muted-foreground">You</p>
-                  <p className="text-xl font-semibold">{currencySymbol}{myTotalScoped.toFixed(2)}</p>
+              {/* Replace the old You/Partner/Difference trio with a multi-user breakdown */}
+              <div className="w-full">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {/* Per-member totals */}
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Members (scoped totals)</p>
+                    <div className="space-y-1">
+                      {memberIds.map((id, idx) => (
+                        <div key={`print-member-${id}`} className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-3 w-3 rounded-full"
+                              style={{ backgroundColor: MEMBER_COLORS[idx % MEMBER_COLORS.length] }}
+                            />
+                            <span className="text-sm font-medium">{userLabel(id)}</span>
+                          </div>
+                          <div className="text-sm font-semibold">
+                            {currencySymbol}{(scopedTotalsComputed.totals[id] ?? 0).toFixed(2)}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Differences vs You */}
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-2">Differences (vs You)</p>
+                    {otherMembersScoped.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No other members</div>
+                    ) : (
+                      <div className="space-y-1">
+                        {otherMembersScoped.map((m, idx) => {
+                          const otherMore = m.total > myTotalScoped;
+                          const diff = Math.abs(myTotalScoped - m.total);
+                          return (
+                            <div key={`print-diff-${m.id}`} className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div
+                                  className="h-3 w-3 rounded-full"
+                                  style={{ backgroundColor: MEMBER_COLORS[idx % MEMBER_COLORS.length] }}
+                                />
+                                <span className="text-sm font-medium">
+                                  {otherMore ? `${userLabel(m.id)} spends more` : `You spend more vs ${userLabel(m.id)}`}
+                                </span>
+                              </div>
+                              <div className={`text-sm font-semibold ${otherMore ? "text-red-600" : "text-emerald-600"}`}>
+                                {otherMore ? "+" : "-"}{currencySymbol}{diff.toFixed(2)}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Partner</p>
-                  <p className="text-xl font-semibold">{currencySymbol}{otherMembersScoped.reduce((s, o) => s + o.total, 0).toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Difference</p>
-                  <p className="text-xl font-semibold">
-                    {currencySymbol}{Math.abs(scopedDifference).toFixed(2)} {scopedDifference >= 0 ? "(You)" : "(Partner)"}
-                  </p>
+                {/* Combined total */}
+                <div className="mt-4 flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Combined Total</span>
+                  <span className="text-sm font-semibold">{currencySymbol}{combinedTotalScoped.toFixed(2)}</span>
                 </div>
               </div>
             </div>
