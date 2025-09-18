@@ -3,7 +3,7 @@ import { mutation, query } from "./_generated/server";
 import { getCurrentUser } from "./users";
 
 export const create = mutation({
-  args: { maxMembers: v.optional(v.number()) },
+  args: { maxMembers: v.optional(v.number()), currencyCode: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
@@ -14,12 +14,28 @@ export const create = mutation({
     // Default to 2 if not provided; clamp to at least 2
     const maxMembers = Math.max(2, Math.floor(args.maxMembers ?? 2));
 
+    // Map currency code to symbol (server-trusted)
+    const code = (args.currencyCode ?? "USD").toUpperCase();
+    const symbolMap: Record<string, string> = {
+      USD: "$",
+      EUR: "€",
+      GBP: "£",
+      JPY: "¥",
+      INR: "₹",
+      AUD: "A$",
+      CAD: "C$",
+      CHF: "CHF",
+    };
+    const currencySymbol = symbolMap[code] ?? "$";
+
     return await ctx.db.insert("rooms", {
       code: roomCode,
       createdBy: user._id,
       members: [user._id],
       createdAt: Date.now(),
       maxMembers,
+      currencyCode: code,
+      currencySymbol,
     });
   },
 });

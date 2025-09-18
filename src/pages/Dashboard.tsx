@@ -26,6 +26,10 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showJoinRoom, setShowJoinRoom] = useState(false);
+  // Add: room config modal state
+  const [showCreateRoomConfig, setShowCreateRoomConfig] = useState(false);
+  const [newRoomMaxMembers, setNewRoomMaxMembers] = useState<string>("2");
+  const [newRoomCurrency, setNewRoomCurrency] = useState<string>("USD");
   const [joinCode, setJoinCode] = useState("");
   const [sortBy, setSortBy] = useState("date");
   const [showEditExpense, setShowEditExpense] = useState(false);
@@ -111,18 +115,25 @@ export default function Dashboard() {
     );
   }
 
+  // Replace handleCreateRoom: open modal instead of prompt
   const handleCreateRoom = async () => {
+    setShowCreateRoomConfig(true);
+  };
+
+  // Add: create room with modal config
+  const handleConfirmCreateRoom = async () => {
     try {
-      // Prompt for custom max members (minimal UI change)
-      const input = window.prompt("Set max members for this room (min 2):", "2");
-      let maxMembers: number | undefined = undefined;
-      if (input !== null) {
-        const n = Number(input);
-        if (!Number.isNaN(n)) maxMembers = Math.max(2, Math.floor(n));
-      }
-      await createRoom(maxMembers ? { maxMembers } : {});
+      const n = Number(newRoomMaxMembers);
+      const maxMembers = Number.isNaN(n) ? undefined : Math.max(2, Math.floor(n));
+      await createRoom({
+        ...(maxMembers ? { maxMembers } : {}),
+        currencyCode: newRoomCurrency,
+      });
+      setShowCreateRoomConfig(false);
+      setNewRoomMaxMembers("2");
+      setNewRoomCurrency("USD");
       toast.success("Room created successfully!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to create room");
     }
   };
@@ -639,6 +650,9 @@ export default function Dashboard() {
     }
   };
 
+  // Currency symbol from room
+  const currencySymbol = userRoom?.currencySymbol ?? "$";
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -679,6 +693,49 @@ export default function Dashboard() {
                 <Button onClick={handleCreateRoom} className="flex-1">
                   Create New Room
                 </Button>
+
+                {/* Add: Room Config Modal */}
+                <Dialog open={showCreateRoomConfig} onOpenChange={setShowCreateRoomConfig}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Configure Room</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label htmlFor="currency">Currency</Label>
+                        <Select value={newRoomCurrency} onValueChange={setNewRoomCurrency}>
+                          <SelectTrigger id="currency">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="USD">USD ($)</SelectItem>
+                            <SelectItem value="EUR">EUR (€)</SelectItem>
+                            <SelectItem value="GBP">GBP (£)</SelectItem>
+                            <SelectItem value="JPY">JPY (¥)</SelectItem>
+                            <SelectItem value="INR">INR (₹)</SelectItem>
+                            <SelectItem value="AUD">AUD (A$)</SelectItem>
+                            <SelectItem value="CAD">CAD (C$)</SelectItem>
+                            <SelectItem value="CHF">CHF (CHF)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label htmlFor="maxMembers">Max Members (min 2)</Label>
+                        <Input
+                          id="maxMembers"
+                          type="number"
+                          min={2}
+                          value={newRoomMaxMembers}
+                          onChange={(e) => setNewRoomMaxMembers(e.target.value)}
+                        />
+                      </div>
+                      <Button onClick={handleConfirmCreateRoom} className="w-full">
+                        Create Room
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+
                 <Dialog open={showJoinRoom} onOpenChange={setShowJoinRoom}>
                   <DialogTrigger asChild>
                     <Button variant="outline" className="flex-1">
@@ -754,7 +811,7 @@ export default function Dashboard() {
                     </Button>
                   )}
                   <Button onClick={handleSubscribe}>
-                    Subscribe ${((pricing?.planPriceCents ?? 120) / 100).toFixed(2)}/mo
+                    Subscribe {currencySymbol}{((pricing?.planPriceCents ?? 120) / 100).toFixed(2)}/mo
                   </Button>
                   {userBilling?.premium && (
                     <Button variant="destructive" onClick={handleCancelAtPeriodEnd}>
@@ -862,15 +919,15 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-center gap-6">
                     <div className="text-sm">
-                      <span className="font-medium">You:</span> ${myTotalScoped.toFixed(2)}
+                      <span className="font-medium">You:</span> {currencySymbol}{myTotalScoped.toFixed(2)}
                     </div>
                     <div className="text-sm">
-                      <span className="font-medium">Partner:</span> ${partnerTotalScoped.toFixed(2)}
+                      <span className="font-medium">Partner:</span> {currencySymbol}{partnerTotalScoped.toFixed(2)}
                     </div>
                     <div className="text-sm">
                       <span className="font-medium">Difference:</span>{" "}
                       <span className={scopedDifference >= 0 ? "text-green-600" : "text-red-600"}>
-                        {scopedDifference >= 0 ? "+" : "-"}${Math.abs(scopedDifference).toFixed(2)}
+                        {scopedDifference >= 0 ? "+" : "-"}{currencySymbol}{Math.abs(scopedDifference).toFixed(2)}
                       </span>
                     </div>
                   </div>
@@ -886,7 +943,7 @@ export default function Dashboard() {
                     <TrendingUp className="h-4 w-4 text-green-600" />
                     <span className="text-sm font-medium">Your Total</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">${myTotalScoped.toFixed(2)}</p>
+                  <p className="text-2xl font-bold mt-2">{currencySymbol}{myTotalScoped.toFixed(2)}</p>
                 </CardContent>
               </Card>
 
@@ -896,7 +953,7 @@ export default function Dashboard() {
                     <TrendingUp className="h-4 w-4 text-blue-600" />
                     <span className="text-sm font-medium">Partner Total</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">${partnerTotalScoped.toFixed(2)}</p>
+                  <p className="text-2xl font-bold mt-2">{currencySymbol}{partnerTotalScoped.toFixed(2)}</p>
                 </CardContent>
               </Card>
 
@@ -906,7 +963,7 @@ export default function Dashboard() {
                     <BarChart3 className="h-4 w-4 text-purple-600" />
                     <span className="text-sm font-medium">Combined Total</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">${(myTotalScoped + partnerTotalScoped).toFixed(2)}</p>
+                  <p className="text-2xl font-bold mt-2">{currencySymbol}{(myTotalScoped + partnerTotalScoped).toFixed(2)}</p>
                 </CardContent>
               </Card>
 
@@ -916,7 +973,7 @@ export default function Dashboard() {
                     <TrendingUp className="h-4 w-4 text-orange-600" />
                     <span className="text-sm font-medium">Difference</span>
                   </div>
-                  <p className="text-2xl font-bold mt-2">${Math.abs(scopedDifference).toFixed(2)}</p>
+                  <p className="text-2xl font-bold mt-2">{currencySymbol}{Math.abs(scopedDifference).toFixed(2)}</p>
                   {myTotalScoped > partnerTotalScoped && (
                     <p className="text-xs text-muted-foreground mt-1">You spend more</p>
                   )}
@@ -1389,7 +1446,7 @@ export default function Dashboard() {
                           )}
                         </div>
                         <div className="flex items-center gap-4">
-                          <span className="text-lg font-semibold">${expense.amount.toFixed(2)}</span>
+                          <span className="text-lg font-semibold">{currencySymbol}{expense.amount.toFixed(2)}</span>
                           {expense.userId === user?._id && (
                             <div className="flex items-center gap-2">
                               <Button

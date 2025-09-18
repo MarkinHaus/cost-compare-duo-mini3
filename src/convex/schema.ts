@@ -49,6 +49,9 @@ const schema = defineSchema(
       createdAt: v.number(),
       // Add: maximum number of members allowed in the room
       maxMembers: v.number(),
+      // Add: room currency configuration
+      currencyCode: v.string(),     // e.g., "USD", "EUR", "GBP"
+      currencySymbol: v.string(),   // e.g., "$", "€", "£"
     })
       .index("by_code", ["code"])
       .index("by_member", ["members"]),
