@@ -39,8 +39,12 @@ export const create = mutation({
       }
     }
 
+    // Normalize tags to lowercase for consistent comparisons
+    const normalizedTags = (args.tags || []).map((t) => t.trim().toLowerCase()).filter(Boolean);
+
     return await ctx.db.insert("expenses", {
       ...args,
+      tags: normalizedTags, // use normalized tags
       beneficiaries,
       userId: user._id,
       createdAt: Date.now(),
@@ -103,12 +107,15 @@ export const updateExpense = mutation({
       throw new Error("Not authorized");
     }
 
+    // Normalize tags to lowercase for consistent comparisons
+    const normalizedTags = (args.tags || []).map((t) => t.trim().toLowerCase()).filter(Boolean);
+
     // Build patch; clear recurrence-specific fields when not recurring
     const patch: Record<string, unknown> = {
       name: args.name,
       amount: args.amount,
       purpose: args.purpose,
-      tags: args.tags,
+      tags: normalizedTags, // use normalized tags
       isRecurring: args.isRecurring,
       startDate: args.isRecurring ? args.startDate ?? undefined : undefined,
       endDate: args.isRecurring ? args.endDate ?? undefined : undefined,
