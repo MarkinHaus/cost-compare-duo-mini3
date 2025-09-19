@@ -1046,7 +1046,8 @@ export default function Dashboard() {
           </Card>
         ) : (
           <>
-            {/* Room Info */}
+            {/* Room Info (moved into Manage Rooms) */}
+            {false && (
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
@@ -1055,7 +1056,7 @@ export default function Dashboard() {
                       <Users className="h-4 w-4" />
                       <span className="font-medium">Room Code:</span>
                       <Badge variant="secondary" className="font-mono text-lg">
-                        {userRoom.code}
+                        {userRoom?.code ?? "------"}
                       </Badge>
                     </div>
                     <Button variant="ghost" size="sm" onClick={copyRoomCode}>
@@ -1064,20 +1065,21 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-sm text-muted-foreground">
-                      {userRoom.members.length} member{userRoom.members.length !== 1 ? 's' : ''}
+                      {(userRoom?.members?.length ?? 0)} member{((userRoom?.members?.length ?? 0) !== 1 ? "s" : "")}
                     </div>
                     {userBilling && (
-                      <Badge variant={userBilling.premium ? "default" : "outline"}>
-                        {userBilling.premium ? "Premium" : "Free"}
+                      <Badge variant={(userBilling?.premium ? "default" : "outline")}>
+                        {userBilling?.premium ? "Premium" : "Free"}
                       </Badge>
                     )}
                   </div>
                 </div>
               </CardContent>
             </Card>
+            )}
 
-            {/* Subscription Card */}
-            <Card>
+            {/* Subscription Card (moved below; hidden here) */}
+            <Card className="hidden">
               <CardHeader>
                 <CardTitle>Subscription</CardTitle>
               </CardHeader>
@@ -1091,17 +1093,7 @@ export default function Dashboard() {
                   <Button onClick={handleSubscribe}>
                     Subscribe {currencySymbol}{((pricing?.planPriceCents ?? 120) / 100).toFixed(2)}/mo
                   </Button>
-                  {userBilling?.premium && (
-                    <Button variant="destructive" onClick={handleCancelAtPeriodEnd}>
-                      Cancel at end of period
-                    </Button>
-                  )}
                 </div>
-                {userBilling?.trialActive && (
-                  <p className="text-sm text-muted-foreground">
-                    Trial ends: {new Date(userBilling.trialEnd!).toLocaleDateString()}
-                  </p>
-                )}
               </CardContent>
             </Card>
 
@@ -1920,6 +1912,31 @@ export default function Dashboard() {
               <CardDescription>Premium-only room management</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Current Room Code (moved here from standalone card) */}
+              {userRoom && (
+                <div className="rounded-md border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="font-medium">Room Code:</span>
+                    <Badge variant="secondary" className="font-mono text-base">
+                      {userRoom.code}
+                    </Badge>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={copyRoomCode}>
+                      <Copy className="h-4 w-4 mr-1" />
+                      Copy
+                    </Button>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => handleCopyInviteLink(userRoom.code)}
+                    >
+                      <Users className="h-4 w-4 mr-1" />
+                      Invite
+                    </Button>
+                  </div>
+                </div>
+              )}
               {/* Global actions */}
               <div className="flex flex-wrap gap-3">
                 <Button onClick={handleCreateRoom}>
