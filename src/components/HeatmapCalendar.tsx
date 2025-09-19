@@ -115,14 +115,16 @@ export default function HeatmapCalendar({ items, weeks = 52, title = "Activity",
       <div className="text-sm font-medium">{title}</div>
 
       {/* Month labels row (fixed column width like GitHub) */}
-      <div className="mt-2 mb-1 grid grid-flow-col auto-cols-[12px] grid-rows-1 w-full text-xs text-muted-foreground">
-        {weekStartDates.map((d, i) => {
-          const prev = i > 0 ? weekStartDates[i - 1] : null;
-          const show = i === 0 || (prev && d.getMonth() !== prev.getMonth());
-          return (
-            <div key={i} className="text-left">{show ? monthShort[d.getMonth()] : ""}</div>
-          );
-        })}
+      <div className="w-full overflow-x-auto">
+        <div className="mt-2 mb-1 inline-grid grid-flow-col auto-cols-[12px] grid-rows-1 text-xs text-muted-foreground shrink-0">
+          {weekStartDates.map((d, i) => {
+            const prev = i > 0 ? weekStartDates[i - 1] : null;
+            const show = i === 0 || (prev && d.getMonth() !== prev.getMonth());
+            return (
+              <div key={i} className="text-left">{show ? monthShort[d.getMonth()] : ""}</div>
+            );
+          })}
+        </div>
       </div>
 
       {/* Grid with left weekday labels + heatmap cells */}
@@ -138,9 +140,9 @@ export default function HeatmapCalendar({ items, weeks = 52, title = "Activity",
           ))}
         </div>
 
-        {/* Heatmap grid - small fixed-size squares like GitHub */}
-        <div className="w-full">
-          <div className="grid grid-flow-col auto-cols-[12px] grid-rows-7 gap-[3px] w-full">
+        {/* Heatmap grid - horizontally scrollable, fixed-size cells like GitHub */}
+        <div className="w-full overflow-x-auto">
+          <div className="inline-grid grid-flow-col auto-cols-[12px] grid-rows-7 gap-[3px] shrink-0">
             {Array.from({ length: weeks }).map((_, colIdx) => (
               <div key={colIdx} className="flex flex-col gap-[3px]">
                 {Array.from({ length: 7 }).map((_, rowIdx) => {
