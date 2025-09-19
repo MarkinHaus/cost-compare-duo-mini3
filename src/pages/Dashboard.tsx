@@ -1972,7 +1972,15 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            {/* Manage Rooms - Current Configuration and Quick Create */}
+            
+
+          </>
+        )}
+
+        {/* Premium-only Room Management Panel at bottom */}
+        {userBilling?.premium && (
+          <>
+          {/* Manage Rooms - Current Configuration and Quick Create */}
             <div className="mt-4 rounded-lg border p-4 bg-card">
               <h4 className="font-semibold mb-2">Create New Room</h4>
               <div className="text-sm text-muted-foreground space-y-3">
@@ -2021,165 +2029,160 @@ export default function Dashboard() {
                 </Button>
               </div>
             </div>
-
-          </>
-        )}
-
-        {/* Premium-only Room Management Panel at bottom */}
-        {userBilling?.premium && (
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle>Manage Rooms</CardTitle>
-              <CardDescription>Premium-only room management</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Current Room Code (moved here from standalone card) */}
-              {userRoom && (
-                <div className="rounded-md border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium">Room Code:</span>
-                    <Badge variant="secondary" className="font-mono text-base">
-                      {userRoom.code}
-                    </Badge>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" onClick={copyRoomCode}>
-                      <Copy className="h-4 w-4 mr-1" />
-                      Copy
-                    </Button>
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => handleCopyInviteLink(userRoom.code)}
-                    >
-                      <Users className="h-4 w-4 mr-1" />
-                      Invite
-                    </Button>
-                  </div>
-                </div>
-              )}
-              {/* Global actions */}
-              <div className="flex flex-wrap gap-3">
-                <Dialog open={showJoinRoom} onOpenChange={setShowJoinRoom}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline">Join Room</Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Join Room</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <div>
-                        <Label htmlFor="joinCode">Room Code</Label>
-                        <Input
-                          id="joinCode"
-                          value={joinCode}
-                          onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                          placeholder="Enter 6-character code"
-                          maxLength={6}
-                        />
-                      </div>
-                      <Button onClick={handleJoinRoom} className="w-full">
-                        Join Room
+            <Card className="mt-6">
+              <CardHeader>
+                <CardTitle>Manage Rooms</CardTitle>
+                <CardDescription>Premium-only room management</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Current Room Code (moved here from standalone card) */}
+                {userRoom && (
+                  <div className="rounded-md border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="font-medium">Room Code:</span>
+                      <Badge variant="secondary" className="font-mono text-base">
+                        {userRoom.code}
+                      </Badge>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button variant="outline" size="sm" onClick={copyRoomCode}>
+                        <Copy className="h-4 w-4 mr-1" />
+                        Copy
+                      </Button>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleCopyInviteLink(userRoom.code)}
+                      >
+                        <Users className="h-4 w-4 mr-1" />
+                        Invite
                       </Button>
                     </div>
-                  </DialogContent>
-                </Dialog>
-              </div>
-
-              {/* Rooms list */}
-              {dedupedRooms.length === 0 ? (
-                <div className="text-sm text-muted-foreground">
-                  You are not in any rooms yet.
+                  </div>
+                )}
+                {/* Global actions */}
+                <div className="flex flex-wrap gap-3">
+                  <Dialog open={showJoinRoom} onOpenChange={setShowJoinRoom}>
+                    <DialogTrigger asChild>
+                      <Button variant="outline">Join Room</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Join Room</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="joinCode">Room Code</Label>
+                          <Input
+                            id="joinCode"
+                            value={joinCode}
+                            onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                            placeholder="Enter 6-character code"
+                            maxLength={6}
+                          />
+                        </div>
+                        <Button onClick={handleJoinRoom} className="w-full">
+                          Join Room
+                        </Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {dedupedRooms.map((r: any) => {
-                    const isOwner = r.createdBy === (user?._id as any);
-                    const isActive = r.code === selectedRoomCode;
-                    return (
-                      <div
-                        key={r.code}
-                        className="flex items-center justify-between border rounded-md p-3"
-                      >
-                        <div className="space-y-1">
+
+                {/* Rooms list */}
+                {dedupedRooms.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">
+                    You are not in any rooms yet.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {dedupedRooms.map((r: any) => {
+                      const isOwner = r.createdBy === (user?._id as any);
+                      const isActive = r.code === selectedRoomCode;
+                      return (
+                        <div
+                          key={r.code}
+                          className="flex items-center justify-between border rounded-md p-3"
+                        >
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Room {r.code}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleCopyInviteLink(r.code)}
+                                className="inline-flex items-center rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
+                                aria-label={`Copy invite link for room ${r.code}`}
+                                title="Invite"
+                              >
+                                Invite
+                              </button>
+                              {isActive && (
+                                <Badge variant="default">Active</Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {r.members?.length ?? 0} member{(r.members?.length ?? 0) !== 1 ? "s" : ""} · Max {r.maxMembers} · {r.currencySymbol} ({r.currencyCode})
+                            </div>
+                          </div>
                           <div className="flex items-center gap-2">
-                            <span className="font-medium">Room {r.code}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyInviteLink(r.code)}
-                              className="inline-flex items-center rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
-                              aria-label={`Copy invite link for room ${r.code}`}
-                              title="Invite"
+                            <Button
+                              variant={isActive ? "secondary" : "outline"}
+                              size="sm"
+                              onClick={() => {
+                                setSelectedRoomCode(r.code);
+                                toast.success(`Switched to room ${r.code}`);
+                              }}
                             >
-                              Invite
-                            </button>
-                            {isActive && (
-                              <Badge variant="default">Active</Badge>
+                              Switch Room
+                            </Button>
+                            {isOwner && (
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button variant="destructive" size="sm">
+                                    Delete
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>Delete room {r.code}?</DialogTitle>
+                                  </DialogHeader>
+                                  <div className="space-y-4">
+                                    <p className="text-sm text-muted-foreground">
+                                      This will permanently delete the room and all its expenses. Only the room owner can delete their room.
+                                    </p>
+                                    <div className="flex justify-end gap-2">
+                                      <Button variant="outline" onClick={() => {}}>
+                                        Cancel
+                                      </Button>
+                                      <Button
+                                        variant="destructive"
+                                        onClick={async () => {
+                                          try {
+                                            await useMutation(api.rooms.removeMyRoom)({ code: r.code });
+                                            toast.success(`Deleted room ${r.code}`);
+                                            // If we deleted the active room, clear selection
+                                            setSelectedRoomCode((prev) => (prev === r.code ? null : prev));
+                                          } catch (e) {
+                                            toast.error("Failed to delete room");
+                                          }
+                                        }}
+                                      >
+                                        Confirm Delete
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
                             )}
                           </div>
-                          <div className="text-xs text-muted-foreground">
-                            {r.members?.length ?? 0} member{(r.members?.length ?? 0) !== 1 ? "s" : ""} · Max {r.maxMembers} · {r.currencySymbol} ({r.currencyCode})
-                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant={isActive ? "secondary" : "outline"}
-                            size="sm"
-                            onClick={() => {
-                              setSelectedRoomCode(r.code);
-                              toast.success(`Switched to room ${r.code}`);
-                            }}
-                          >
-                            Switch Room
-                          </Button>
-                          {isOwner && (
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="destructive" size="sm">
-                                  Delete
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>Delete room {r.code}?</DialogTitle>
-                                </DialogHeader>
-                                <div className="space-y-4">
-                                  <p className="text-sm text-muted-foreground">
-                                    This will permanently delete the room and all its expenses. Only the room owner can delete their room.
-                                  </p>
-                                  <div className="flex justify-end gap-2">
-                                    <Button variant="outline" onClick={() => {}}>
-                                      Cancel
-                                    </Button>
-                                    <Button
-                                      variant="destructive"
-                                      onClick={async () => {
-                                        try {
-                                          await useMutation(api.rooms.removeMyRoom)({ code: r.code });
-                                          toast.success(`Deleted room ${r.code}`);
-                                          // If we deleted the active room, clear selection
-                                          setSelectedRoomCode((prev) => (prev === r.code ? null : prev));
-                                        } catch (e) {
-                                          toast.error("Failed to delete room");
-                                        }
-                                      }}
-                                    >
-                                      Confirm Delete
-                                    </Button>
-                                  </div>
-                                </div>
-                              </DialogContent>
-                            </Dialog>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </>
         )}
 
         {userBilling?.premium ? (
