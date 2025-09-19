@@ -1,4 +1,5 @@
 import React from "react";
+import { cn } from "@/lib/utils";
 
 type HeatmapCalendarProps = {
   // Pass any list of items that include a date-like numeric timestamp (ms) or Date
@@ -7,6 +8,8 @@ type HeatmapCalendarProps = {
   weeks?: number;
   // Optional title
   title?: string;
+  // Add: allow parent to pass width classes
+  className?: string;
 };
 
 function toYMD(d: Date): string {
@@ -38,7 +41,8 @@ const COLOR_CLASSES = [
   "bg-emerald-600",
 ];
 
-export default function HeatmapCalendar({ items, weeks = 12, title = "Activity" }: HeatmapCalendarProps) {
+export default function HeatmapCalendar({ items, weeks = 12, title = "Activity", className }: HeatmapCalendarProps) {
+
   // Build a map of counts per day (YYYY-MM-DD)
   const counts = React.useMemo(() => {
     const map = new Map<string, number>();
@@ -98,19 +102,16 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity" 
   const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className={cn("w-full", className)}>
       <div className="text-sm font-medium">{title}</div>
-      <div className="flex gap-2">
-        <div className="flex flex-col gap-1 text-xs text-muted-foreground">
-          {dayLabels.map((dl, idx) => (
-            <div key={idx} className="h-3 leading-3">
-              {idx % 2 === 0 ? dl : ""}
-            </div>
-          ))}
-        </div>
-        <div className="overflow-x-auto">
-          <div className="grid" style={{ gridTemplateColumns: `repeat(${weeks}, minmax(0, 1fr))`, gap: "4px" }}>
-            {Array.from({ length: weeks }).map((_, colIdx) => (
+      <div
+        className="w-full"
+      >
+        <div
+          className="grid grid-flow-col auto-cols-[minmax(12px,1fr)] grid-rows-7 gap-1 w-full"
+        >
+          {
+            Array.from({ length: weeks }).map((_, colIdx) => (
               <div key={colIdx} className="flex flex-col gap-1">
                 {Array.from({ length: 7 }).map((_, rowIdx) => {
                   const cell = grid[rowIdx]?.[colIdx];
@@ -120,7 +121,7 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity" 
                   return (
                     <div
                       key={`${rowIdx}-${colIdx}`}
-                      className={`h-3 w-3 rounded-sm ${cell ? colorFor(cell.count) : COLOR_CLASSES[0]} transition-colors`}
+                      className={`w-full aspect-square rounded-sm ${cell ? colorFor(cell.count) : COLOR_CLASSES[0]} transition-colors`}
                       title={title}
                     />
                   );
@@ -129,7 +130,6 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity" 
             ))}
           </div>
         </div>
-      </div>
 
       {/* Legend */}
       <div className="flex items-center gap-2 text-xs text-muted-foreground">
