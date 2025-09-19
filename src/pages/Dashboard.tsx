@@ -1512,7 +1512,9 @@ function getExpenseTimestamp(expense: any): number | null {
             </div>
 
             {/* Add Expense and Controls */}
-            <div className="flex justify-between items-center">
+            <div
+              className="flex justify-between items-center overflow-y-auto flex-row-reverse md:flex-row"
+            >
               <div className="flex items-center gap-4">
                 <Label htmlFor="sort">Sort by:</Label>
                 <Select value={sortBy} onValueChange={setSortBy}>
