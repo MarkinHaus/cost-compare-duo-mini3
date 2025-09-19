@@ -1512,32 +1512,8 @@ function getExpenseTimestamp(expense: any): number | null {
             </div>
 
             {/* Add Expense and Controls */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <Label htmlFor="sort">Sort by:</Label>
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="date">Date</SelectItem>
-                    <SelectItem value="amount">Amount</SelectItem>
-                    <SelectItem value="name">Name</SelectItem>
-                  </SelectContent>
-                </Select>
-                {/* Add: Chart type selector */}
-                <Label htmlFor="chart-type" className="ml-2">Chart:</Label>
-                <Select value={chartType} onValueChange={(v) => setChartType(v as "bar" | "pie")}>
-                  <SelectTrigger id="chart-type" className="w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bar">Bar</SelectItem>
-                    <SelectItem value="pie">Pie</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
+            <div className="flex justify-between items-center overflow-y-auto">
+              
               <Dialog open={showAddExpense} onOpenChange={setShowAddExpense}>
                 <DialogTrigger asChild>
                   <Button>
@@ -1924,6 +1900,31 @@ function getExpenseTimestamp(expense: any): number | null {
                   </div>
                 </DialogContent>
               </Dialog>
+
+              <div className="flex items-center gap-4">
+                <Label htmlFor="sort">Sort by:</Label>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date">Date</SelectItem>
+                    <SelectItem value="amount">Amount</SelectItem>
+                    <SelectItem value="name">Name</SelectItem>
+                  </SelectContent>
+                </Select>
+                {/* Add: Chart type selector */}
+                <Label htmlFor="chart-type" className="ml-2">Chart:</Label>
+                <Select value={chartType} onValueChange={(v) => setChartType(v as "bar" | "pie")}>
+                  <SelectTrigger id="chart-type" className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bar">Bar</SelectItem>
+                    <SelectItem value="pie">Pie</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Expenses List */}
@@ -2089,15 +2090,9 @@ function getExpenseTimestamp(expense: any): number | null {
             </Card>
 
             {/* GitHub-style Heatmap Calendar (Daily expense counts) */}
-            <div className="bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm print:hidden">
+            <div className="bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm print:hidden overflow-y-auto">
               <div className="px-6">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold">Expense Activity</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Daily expense tracking over the past year
-                  </p>
-                </div>
-                
+               
                 <ContributionsCalendar
                   contributions={processExpenseData(
                     filteredExpenses ?? expenses ?? []
