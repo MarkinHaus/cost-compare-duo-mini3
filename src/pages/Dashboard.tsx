@@ -22,7 +22,7 @@ import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/compo
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend, PieChart, Pie, Cell } from "recharts";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { RoomSettings } from "@/components/RoomSettings";
-import HeatmapCalendar from "@/components/HeatmapCalendar";
+import ContributionsCalendar from "@/components/HeatmapCalendar";
 /* removed duplicate useMutation import */
 
 export default function Dashboard() {
@@ -993,6 +993,73 @@ export default function Dashboard() {
       toast.error(err?.message || "Failed to create room");
     }
   }
+
+  // Add this helper function at the top of your file or in a utils file
+function processExpenseData(expenses: any[]): ContributionItem[] {
+  if (!Array.isArray(expenses) || expenses.length === 0) {
+    return [];
+  }
+
+  // Group expenses by date and sum counts/amounts
+  const dailyContributions = new Map<string, number>();
+
+  expenses.forEach((expense) => {
+    try {
+      // Determine the best timestamp to use
+      const timestamp = getExpenseTimestamp(expense);
+      if (!timestamp) return;
+
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) return;
+
+      // Create date key (YYYY-MM-DD format)
+      const dateKey = date.toISOString().split('T')[0];
+      
+      // Determine contribution count
+      // Option 1: Count number of expenses per day
+      const count = 1;
+      
+      // Option 2: Use expense amount as contribution weight
+      // const count = Math.max(1, Math.floor((expense.amount ?? 0) / 10));
+      
+      dailyContributions.set(
+        dateKey, 
+        (dailyContributions.get(dateKey) ?? 0) + count
+      );
+    } catch (error) {
+      console.warn('Error processing expense:', error);
+    }
+  });
+
+  // Convert to ContributionItem array
+  return Array.from(dailyContributions.entries()).map(([dateString, count]) => ({
+    date: new Date(dateString),
+    count,
+  }));
+}
+
+function getExpenseTimestamp(expense: any): number | null {
+  // Priority order: startDate -> createdAt -> _creationTime -> current time
+  const candidates = [
+    expense?.startDate,
+    expense?.createdAt, 
+    expense?._creationTime,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'number' && candidate > 0) {
+      return candidate;
+    }
+    if (typeof candidate === 'string') {
+      const parsed = Date.parse(candidate);
+      if (!isNaN(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return null; // Don't use current time as fallback to avoid incorrect data
+}
 
   return (
     <motion.div
@@ -1976,20 +2043,20 @@ export default function Dashboard() {
             {/* GitHub-style Heatmap Calendar (Daily expense counts) */}
             <div className="bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm print:hidden">
               <div className="px-6">
-                <HeatmapCalendar
-                  // Prefer the filtered list if present; fallback to full list if available
-                  items={((typeof filteredExpenses !== "undefined" && filteredExpenses) ? filteredExpenses : (typeof expenses !== "undefined" ? expenses : []))
-                    .map((e: any) => {
-                      // Choose a best-available timestamp to represent when the expense occurred/tracked.
-                      // Try startDate (for recurring start), then createdAt, then _creationTime.
-                      const ts: number | undefined =
-                        (typeof e?.startDate === "number" ? e.startDate : undefined) ??
-                        (typeof e?.createdAt === "number" ? e.createdAt : undefined) ??
-                        (typeof e?._creationTime === "number" ? e._creationTime : undefined);
-                      return { date: ts ?? Date.now() };
-                    })}
-                  title="Daily activity (expenses per day)"
-                  weeks={12}
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold">Expense Activity</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Daily expense tracking over the past year
+                  </p>
+                </div>
+                
+                <ContributionsCalendar
+                  contributions={processExpenseData(
+                    filteredExpenses ?? expenses ?? []
+                  )}
+                  weeks={53}
+                  isLoading={isLoading}
+                  className="w-full"
                 />
               </div>
             </div>
