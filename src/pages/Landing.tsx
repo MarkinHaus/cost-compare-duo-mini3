@@ -101,6 +101,9 @@ export default function Landing() {
               <br />
               <span className="text-primary">stay in sync</span>
             </h1>
+            <p className="text-muted-foreground text-lg sm:text-xl">
+              For couples and partners
+            </p>
             <p className="text-xl text-muted-foreground mb-12 max-w-2xl mx-auto">
               A minimalist expense tracker for couples and partners. 
               Share costs, compare spending, and maintain financial transparency.

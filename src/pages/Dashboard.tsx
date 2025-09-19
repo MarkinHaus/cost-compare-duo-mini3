@@ -21,6 +21,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/components/ui/chart";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend, PieChart, Pie, Cell } from "recharts";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+/* removed duplicate useMutation import */
 
 export default function Dashboard() {
   const { isLoading, isAuthenticated, user, signOut } = useAuth();
@@ -206,6 +207,9 @@ export default function Dashboard() {
 
   // Mutation to join a room by code
   const joinRoomByCode = useMutation(api.rooms.join);
+
+  // Add: immediate room creation mutation
+  const createRoomImmediate = useMutation(api.rooms.create);
 
   // Helper to copy invite link
   function handleCopyInviteLink(code: string) {
@@ -975,6 +979,18 @@ export default function Dashboard() {
 
   // Currency symbol from room
   const currencySymbol = activeRoom?.currencySymbol ?? "$";
+
+  // Add: handler to create a room inheriting current room settings
+  async function handleCreateRoomInherit() {
+    try {
+      const currencyCode = userRoom?.currencyCode ?? "USD";
+      const maxMembers = userRoom?.maxMembers ?? 3;
+      await createRoomImmediate({ currencyCode, maxMembers });
+      toast.success("Room created with current settings");
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to create room");
+    }
+  }
 
   return (
     <motion.div
@@ -1954,6 +1970,357 @@ export default function Dashboard() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Manage Rooms - Current Configuration and Quick Create */}
+            <div className="mt-4 rounded-lg border p-4 bg-card">
+              <h4 className="font-semibold mb-2">Current Room Settings</h4>
+              <div className="text-sm text-muted-foreground space-y-1">
+                <div>
+                  <span className="font-medium text-foreground">Currency: </span>
+                  <span>{userRoom?.currencyCode ?? "USD"}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-foreground">Member limit: </span>
+                  <span>{userRoom?.maxMembers ?? 3}</span>
+                </div>
+              </div>
+              <div className="mt-3">
+                <Button onClick={handleCreateRoomInherit}>
+                  Create Room with these settings
+                </Button>
+              </div>
+            </div>
+
+            {/* Premium-only Room Management Panel at bottom */}
+            {userBilling?.premium && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle>Manage Rooms</CardTitle>
+                  <CardDescription>Premium-only room management</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {/* Current Room Code (moved here from standalone card) */}
+                  {userRoom && (
+                    <div className="rounded-md border p-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="font-medium">Room Code:</span>
+                        <Badge variant="secondary" className="font-mono text-base">
+                          {userRoom.code}
+                        </Badge>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={copyRoomCode}>
+                          <Copy className="h-4 w-4 mr-1" />
+                          Copy
+                        </Button>
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => handleCopyInviteLink(userRoom.code)}
+                        >
+                          <Users className="h-4 w-4 mr-1" />
+                          Invite
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {/* Global actions */}
+                  <div className="flex flex-wrap gap-3">
+                    <Button onClick={handleCreateRoom}>
+                      Create Room
+                    </Button>
+                    <Dialog open={showJoinRoom} onOpenChange={setShowJoinRoom}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline">Join Room</Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Join Room</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4">
+                          <div>
+                            <Label htmlFor="joinCode">Room Code</Label>
+                            <Input
+                              id="joinCode"
+                              value={joinCode}
+                              onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                              placeholder="Enter 6-character code"
+                              maxLength={6}
+                            />
+                          </div>
+                          <Button onClick={handleJoinRoom} className="w-full">
+                            Join Room
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+
+                  {/* Rooms list */}
+                  {dedupedRooms.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">
+                      You are not in any rooms yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {dedupedRooms.map((r: any) => {
+                        const isOwner = r.createdBy === (user?._id as any);
+                        const isActive = r.code === selectedRoomCode;
+                        return (
+                          <div
+                            key={r.code}
+                            className="flex items-center justify-between border rounded-md p-3"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">Room {r.code}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyInviteLink(r.code)}
+                                  className="inline-flex items-center rounded-md bg-primary px-2 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
+                                  aria-label={`Copy invite link for room ${r.code}`}
+                                  title="Invite"
+                                >
+                                  Invite
+                                </button>
+                                {isActive && (
+                                  <Badge variant="default">Active</Badge>
+                                )}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {r.members?.length ?? 0} member{(r.members?.length ?? 0) !== 1 ? "s" : ""} · Max {r.maxMembers} · {r.currencySymbol} ({r.currencyCode})
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button
+                                variant={isActive ? "secondary" : "outline"}
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedRoomCode(r.code);
+                                  toast.success(`Switched to room ${r.code}`);
+                                }}
+                              >
+                                Switch Room
+                              </Button>
+                              {isOwner && (
+                                <Dialog>
+                                  <DialogTrigger asChild>
+                                    <Button variant="destructive" size="sm">
+                                      Delete
+                                    </Button>
+                                  </DialogTrigger>
+                                  <DialogContent>
+                                    <DialogHeader>
+                                      <DialogTitle>Delete room {r.code}?</DialogTitle>
+                                    </DialogHeader>
+                                    <div className="space-y-4">
+                                      <p className="text-sm text-muted-foreground">
+                                        This will permanently delete the room and all its expenses. Only the room owner can delete their room.
+                                      </p>
+                                      <div className="flex justify-end gap-2">
+                                        <Button variant="outline" onClick={() => {}}>
+                                          Cancel
+                                        </Button>
+                                        <Button
+                                          variant="destructive"
+                                          onClick={async () => {
+                                            try {
+                                              await useMutation(api.rooms.removeMyRoom)({ code: r.code });
+                                              toast.success(`Deleted room ${r.code}`);
+                                              // If we deleted the active room, clear selection
+                                              setSelectedRoomCode((prev) => (prev === r.code ? null : prev));
+                                            } catch (e) {
+                                              toast.error("Failed to delete room");
+                                            }
+                                          }}
+                                        >
+                                          Confirm Delete
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </DialogContent>
+                                </Dialog>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {userBilling?.premium ? (
+              <div className="mt-8 border rounded-lg p-4 bg-red-50 dark:bg-red-950/20">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-red-700 dark:text-red-300">Danger Zone</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Immediate cancellation will revoke premium and delete your owned rooms.
+                    </p>
+                  </div>
+                  <Button variant="destructive" onClick={() => setShowCancelNow(true)}>
+                    Cancel Now
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+
+            {/* Trial Ended Prompt */}
+            <AlertDialog open={showTrialExpiredModal} onOpenChange={setShowTrialExpiredModal}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Your free trial has ended</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    To keep premium features (unlimited rooms, higher member limits, etc.), please subscribe.
+                    If you choose not to subscribe, you can Cancel Now which will immediately revoke premium
+                    access and delete all rooms you own and their expenses, and remove you from any other rooms.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setShowTrialExpiredModal(false)}>
+                    Decide Later
+                  </AlertDialogCancel>
+                  <Button variant="default" onClick={() => { setShowTrialExpiredModal(false); handleSubscribe(); }}>
+                    Subscribe
+                  </Button>
+                  <AlertDialogAction asChild>
+                    <Button variant="destructive" onClick={handleTrialCancelNow}>
+                      Cancel Now (delete my data)
+                    </Button>
+                  </AlertDialogAction>
+                  <Button variant="secondary" onClick={handleContinueAsFree}>
+                    Continue as Free
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={showCancelNow} onOpenChange={setShowCancelNow}>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Cancel Premium Now?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    If you cancel now, your premium access will end immediately. All rooms you own will be deleted, and you will lose access to any other rooms you are a member of. This action cannot be undone. Do you want to continue?
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel onClick={() => setShowCancelNow(false)}>
+                    Keep Premium
+                  </AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={async () => {
+                      try {
+                        await cancelNowAction({});
+                        // Close the dialog and rely on reactive queries to refresh the UI,
+                        // which will hide premium-only panels and detach from deleted rooms.
+                        setShowCancelNow(false);
+                      } catch (e) {
+                        // no toast here to keep minimal; existing error handling/notifications apply
+                        setShowCancelNow(false);
+                      }
+                    }}
+                  >
+                    Confirm & Cancel Premium
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Cookie Consent Modal */}
+            <Dialog open={showCookieModal} onOpenChange={setShowCookieModal}>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Cookie Preferences</DialogTitle>
+                  <DialogDescription>
+                    We use cookies to enhance your experience. Choose your preference below. You can change this later in your browser settings.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                  <p className="text-foreground">What we use:</p>
+                  <ul className="list-disc pl-6">
+                    <li>Essential cookies for core functionality</li>
+                    <li>Optional analytics to improve the product</li>
+                  </ul>
+                </div>
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <Button variant="secondary" onClick={handleCookieDecline}>
+                    Decline
+                  </Button>
+                  <Button variant="outline" onClick={handleCookieAllowAnalytics}>
+                    Allow Analytics Only
+                  </Button>
+                  <Button onClick={handleCookieAcceptAll}>
+                    Accept All
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Terms & Privacy Modal */}
+            <Dialog open={showTermsModal} onOpenChange={setShowTermsModal}>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Terms & Privacy</DialogTitle>
+                  <DialogDescription>
+                    Please review our Terms of Service and Privacy Policy. By accepting, you agree to the terms outlined.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+                  <p>
+                    We collect minimal data required to operate collaborative rooms, subscriptions, and security. See details in our policies below.
+                  </p>
+                  <div className="text-primary underline">
+                    {/* Replace with actual hosted documents if available */}
+                    <a href="#" onClick={(e) => e.preventDefault()}>View Terms of Service</a> ·{" "}
+                    <a href="#" onClick={(e) => e.preventDefault()}>View Privacy Policy</a>
+                  </div>
+                </div>
+                <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <Button variant="secondary" onClick={handleTermsDecline}>
+                    Decline
+                  </Button>
+                  <Button onClick={handleTermsAccept}>
+                    Accept
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            {/* Optional enhancement: quick access to Terms & Privacy */}
+            <div className="fixed bottom-4 right-4 z-40 print:hidden">
+              <Button
+                variant="outline"
+                size="sm"
+                className="opacity-80 hover:opacity-100"
+                onClick={() => setShowTermsModal(true)}
+              >
+                Terms & Privacy
+              </Button>
+            </div>
+
+            {/* Add: Bottom subscription card for free users */}
+            {!userBilling?.premium && (
+              <div className="fixed bottom-4 left-4 right-4 z-50 print:hidden">
+                <div className="mx-auto max-w-3xl">
+                  <Card className="shadow-lg border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+                    <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4">
+                      <div className="space-y-1">
+                        <div className="font-semibold">Upgrade to Premium</div>
+                        <div className="text-sm text-muted-foreground">
+                          • Unlimited rooms • Larger member limits • Enhanced charts & PDF • Priority support
+                        </div>
+                      </div>
+                      <Button onClick={handleSubscribe} className="whitespace-nowrap">
+                        Subscribe {currencySymbol}{(((pricing?.planPriceCents ?? 120) / 100)).toFixed(2)}/mo
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
           </>
         )}
 
