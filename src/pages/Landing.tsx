@@ -93,11 +93,11 @@ export default function Landing() {
           For couples and partners
         </div>
         <h1 className="text-4xl sm:text-5xl font-bold tracking-tight">
-          Track expenses together — clear, fair, and fast
+          Track expenses together clear, fair, and fast
         </h1>
         <p className="mt-4 text-muted-foreground max-w-2xl">
           Create shared rooms with 1–n members, compare spending with Bar or Pie charts,
-          view a premium GitHub‑style heatmap, manage advanced recurring costs and beneficiaries,
+          view a GitHub‑style heatmap, manage advanced recurring costs and beneficiaries,
           and export polished PDF reports. Real‑time, privacy‑first, and PWA‑installable.
         </p>
         <div className="mt-8 flex flex-wrap items-center gap-3">
