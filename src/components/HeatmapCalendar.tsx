@@ -32,13 +32,13 @@ function addDays(d: Date, n: number): Date {
 }
 
 const COLOR_CLASSES = [
-  "bg-emerald-50",
-  "bg-emerald-100",
-  "bg-emerald-200",
-  "bg-emerald-300",
-  "bg-emerald-400",
-  "bg-emerald-500",
+  "bg-muted",         // 0 contributions -> subtle gray
+  "bg-emerald-900",
+  "bg-emerald-800",
+  "bg-emerald-700",
   "bg-emerald-600",
+  "bg-emerald-500",
+  "bg-emerald-400",
 ];
 
 export default function HeatmapCalendar({ items, weeks = 12, title = "Activity", className }: HeatmapCalendarProps) {
@@ -96,22 +96,51 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity",
     return COLOR_CLASSES[Math.min(bucket, COLOR_CLASSES.length - 1)];
   }
 
-  const weekLabels: string[] = [];
-  for (let w = 0; w < weeks; w++) weekLabels.push("");
+  const monthShort = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"] as const;
 
-  const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  // Precompute week start dates for label row
+  const weekStartDates: Date[] = React.useMemo(() => {
+    const dates: Date[] = [];
+    for (let w = 0; w < weeks; w++) {
+      dates.push(addDays(start, w * 7));
+    }
+    return dates;
+  }, [start, weeks]);
+
+  const weekdaySideLabels: string[] = ["", "Mon", "", "Wed", "", "Fri", ""];
 
   return (
     <div className={cn("w-full", className)}>
       <div className="text-sm font-medium">{title}</div>
-      <div
-        className="w-full"
-      >
-        <div
-          className="grid grid-flow-col auto-cols-[minmax(12px,1fr)] grid-rows-7 gap-1 w-full"
-        >
-          {
-            Array.from({ length: weeks }).map((_, colIdx) => (
+
+      {/* Month labels row */}
+      <div className="mt-2 mb-1 grid grid-flow-col auto-cols-[minmax(12px,1fr)] grid-rows-1 w-full text-xs text-muted-foreground">
+        {weekStartDates.map((d, i) => {
+          const prev = i > 0 ? weekStartDates[i - 1] : null;
+          const show = i === 0 || (prev && d.getMonth() !== prev.getMonth());
+          return (
+            <div key={i} className="text-left">{show ? monthShort[d.getMonth()] : ""}</div>
+          );
+        })}
+      </div>
+
+      {/* Grid with left weekday labels + heatmap cells */}
+      <div className="w-full flex gap-2">
+        {/* Left weekday labels (hidden on very small screens) */}
+        <div className="hidden sm:flex sm:flex-col sm:justify-between text-xs text-muted-foreground">
+          {Array.from({ length: 7 }).map((_, rowIdx) => (
+            <div key={rowIdx} className="h-full flex items-start">
+              <span className={cn(rowIdx % 2 === 1 ? "opacity-100" : "opacity-0")}>
+                {weekdaySideLabels[rowIdx]}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Heatmap grid */}
+        <div className="w-full">
+          <div className="grid grid-flow-col auto-cols-[minmax(12px,1fr)] grid-rows-7 gap-1 w-full">
+            {Array.from({ length: weeks }).map((_, colIdx) => (
               <div key={colIdx} className="flex flex-col gap-1">
                 {Array.from({ length: 7 }).map((_, rowIdx) => {
                   const cell = grid[rowIdx]?.[colIdx];
@@ -121,7 +150,11 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity",
                   return (
                     <div
                       key={`${rowIdx}-${colIdx}`}
-                      className={`w-full aspect-square rounded-sm ${cell ? colorFor(cell.count) : COLOR_CLASSES[0]} transition-colors`}
+                      className={cn(
+                        "w-full aspect-square rounded-[3px] border",
+                        cell ? colorFor(cell.count) : COLOR_CLASSES[0],
+                        "border-border/50 transition-colors"
+                      )}
                       title={title}
                     />
                   );
@@ -130,13 +163,14 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity",
             ))}
           </div>
         </div>
+      </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
         <span>Less</span>
         <div className="flex items-center gap-1">
           {COLOR_CLASSES.slice(0, 5).map((c, i) => (
-            <div key={i} className={`h-3 w-3 rounded-sm ${c}`} />
+            <div key={i} className={cn("h-3 w-3 rounded-[3px] border border-border/50", c)} />
           ))}
         </div>
         <span>More</span>
