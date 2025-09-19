@@ -157,62 +157,80 @@ export default function ContributionsCalendar({
 
   return (
     <div className={cn("select-none", className)}>
-      <div className="flex flex-col gap-1">
-        {/* Month Labels */}
-        <div className="relative" style={{ marginLeft: '15px', height: '16px', width: `${weeks * 14}px` }}>
-          {monthLabels.map(({ month, week }) => (
-            <div
-              key={`${month}-${week}`}
-              className="absolute text-xs text-gray-600"
-              style={{ 
-                left: `${week * 14}px`,
-                top: '0px',
-                minWidth: '28px', // Minimum width to prevent overlap
-              }}
-            >
-              {month}
-            </div>
-          ))}
-        </div>
-
-        <div className="flex">
-          {/* Day Labels */}
-          <div className="flex flex-col gap-0.5 mr-1">
-            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+      <div className="overflow-x-auto">
+        <div className="flex flex-col gap-1 min-w-max">
+          {/* Month Labels */}
+          <div
+            className="relative"
+            style={{ marginLeft: '15px', height: '16px', width: `${weeks * 14}px` }}
+          >
+            {monthLabels.map(({ month, week }) => (
               <div
-                key={day}
-                className="text-xs text-gray-600 text-right"
-                style={{ 
-                  height: '11px',
-                  width: '14px',
-                  lineHeight: '11px',
-                  visibility: index % 2 === 1 ? 'visible' : 'hidden'
+                key={`${month}-${week}`}
+                className="absolute text-xs text-gray-600"
+                style={{
+                  left: `${week * 14}px`,
+                  top: '0px',
+                  minWidth: '28px', // Minimum width to prevent overlap
                 }}
               >
-                {day}
+                {month}
               </div>
             ))}
           </div>
 
-          {/* Calendar Grid */}
-          <div className="flex flex-col gap-0.5">
-            {calendarGrid.map((row, dayIndex) => (
-              <div key={dayIndex} className="flex gap-0.5">
-                {row.map((cell, weekIndex) => (
-                  <div
-                    key={`${dayIndex}-${weekIndex}`}
-                    className="w-[11px] h-[11px] rounded-sm cursor-pointer transition-all hover:ring-1 hover:ring-gray-400"
-                    style={{ 
-                      backgroundColor: isLoading 
-                        ? '#f0f0f0' 
-                        : CONTRIBUTION_COLORS[cell.level as keyof typeof CONTRIBUTION_COLORS]
-                    }}
-                    onMouseEnter={(e) => !isLoading && handleCellMouseEnter(e, cell)}
-                    onMouseLeave={handleCellMouseLeave}
-                  />
-                ))}
-              </div>
-            ))}
+          <div className="flex">
+            {/* Day Labels */}
+            <div className="flex flex-col gap-0.5 mr-1">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, index) => (
+                <div
+                  key={day}
+                  className="text-xs text-gray-600 text-right"
+                  style={{
+                    height: '11px',
+                    width: '14px',
+                    lineHeight: '11px',
+                    visibility: index % 2 === 1 ? 'visible' : 'hidden',
+                  }}
+                >
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="flex flex-col gap-0.5">
+              {calendarGrid.map((row, dayIndex) => (
+                <div key={dayIndex} className="flex gap-0.5">
+                  {row.map((cell, weekIndex) => {
+                    // Robust background selection so dots never disappear
+                    const bgColor = isLoading
+                      ? '#f0f0f0'
+                      : CONTRIBUTION_COLORS[(cell?.level ?? 0) as keyof typeof CONTRIBUTION_COLORS];
+
+                    return (
+                      <div
+                        key={`${dayIndex}-${weekIndex}`}
+                        className="w-[11px] h-[11px] rounded-sm cursor-pointer transition-all hover:ring-1 hover:ring-gray-400"
+                        style={{ backgroundColor: bgColor }}
+                        title={
+                          cell
+                            ? `${cell.count} contribution${cell.count !== 1 ? 's' : ''} on ${cell.date.toLocaleDateString('en-US', {
+                                weekday: 'long',
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric',
+                              })}`
+                            : 'No contributions'
+                        }
+                        onMouseEnter={(e) => !isLoading && cell && handleCellMouseEnter(e, cell)}
+                        onMouseLeave={handleCellMouseLeave}
+                      />
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
