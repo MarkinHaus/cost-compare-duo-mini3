@@ -61,11 +61,10 @@ export default function HeatmapCalendar({ items, weeks = 52, title = "Activity",
   const endWeekday = today.getDay(); // 0..6 (Sun..Sat)
   const end = addDays(today, 0);
   const start = React.useMemo(() => {
-    // total days = weeks * 7
-    const totalDays = weeks * 7;
-    // end aligned to today, start is totalDays-1 days ago
-    const s = addDays(end, -(totalDays - 1));
-    return s;
+    // Align start to the Sunday of the first column over the requested span
+    // Example: for 52 weeks, start = Sunday 51 weeks ago from the current week
+    const s = addDays(end, -((weeks - 1) * 7 + end.getDay()));
+    return startOfDay(s);
   }, [weeks, end]);
 
   // Build grid: 7 rows (Sun..Sat), columns = weeks
@@ -143,27 +142,39 @@ export default function HeatmapCalendar({ items, weeks = 52, title = "Activity",
         {/* Heatmap grid - horizontally scrollable, fixed-size cells like GitHub */}
         <div className="w-full overflow-x-auto">
           <div className="inline-grid grid-flow-col auto-cols-[12px] grid-rows-7 gap-[3px] shrink-0">
-            {Array.from({ length: weeks }).map((_, colIdx) => (
-              <div key={colIdx} className="flex flex-col gap-[3px]">
-                {Array.from({ length: 7 }).map((_, rowIdx) => {
-                  const cell = grid[rowIdx]?.[colIdx];
-                  const title = cell
-                    ? `${toYMD(cell.date)} • ${cell.count} expense${cell.count === 1 ? "" : "s"}`
-                    : "";
-                  return (
-                    <div
-                      key={`${rowIdx}-${colIdx}`}
-                      className={cn(
-                        "w-[10px] h-[10px] rounded-[2px] border",
-                        cell ? colorFor(cell.count) : COLOR_CLASSES[0],
-                        "border-border/40 transition-colors"
-                      )}
-                      title={title}
-                    />
-                  );
-                })}
-              </div>
-            ))}
+            {Array.from({ length: weeks }).map((_, colIdx) => {
+              const weekStart = weekStartDates[colIdx];
+              const prevWeekStart = colIdx > 0 ? weekStartDates[colIdx - 1] : null;
+              const isNewMonth =
+                colIdx === 0 || (prevWeekStart && weekStart.getMonth() !== prevWeekStart.getMonth());
+
+              return (
+                <div key={colIdx} className="relative flex flex-col gap-[3px]">
+                  {/* Month separator line to create tiled visuals like GitHub */}
+                  {isNewMonth ? (
+                    <div className="absolute -left-[2px] top-0 bottom-0 w-px bg-border/40" aria-hidden />
+                  ) : null}
+                  {Array.from({ length: 7 }).map((_, rowIdx) => {
+                    const cell = grid[rowIdx]?.[colIdx];
+                    const title = cell
+                      ? `${toYMD(cell.date)} • ${cell.count} expense${cell.count === 1 ? "" : "s"}`
+                      : "";
+                    return (
+                      <div
+                        key={`${rowIdx}-${colIdx}`}
+                        className={cn(
+                          "w-[10px] h-[10px] rounded-[2px] border",
+                          cell ? colorFor(cell.count) : COLOR_CLASSES[0],
+                          "border-border/40 transition-colors"
+                        )}
+                        title={title}
+                        aria-label={title}
+                      />
+                    );
+                  })}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>
