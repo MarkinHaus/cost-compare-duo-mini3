@@ -23,7 +23,55 @@ import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip,
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { RoomSettings } from "@/components/RoomSettings";
 import ContributionsCalendar from "@/components/HeatmapCalendar";
+import { cn } from "@/lib/utils";
 /* removed duplicate useMutation import */
+
+// Add: type used by heatmap processing to fix TS error
+type ContributionItem = {
+  date: number | Date; // accept Date or timestamp
+  count: number;
+};
+
+// Add: default weeks constant for heatmap usage when referenced locally
+const calendarWeeks: number = 52;
+
+// Add: safe fallback to prevent runtime errors if getExpenseStats is referenced before being defined
+/* removed duplicate getExpenseStats fallback; using typed version below */
+
+// Added: minimal className combiner (fallback if not imported)
+/* removed duplicate local cn; using import from "@/lib/utils" */
+
+// Added: weeks used by heatmap width calculations
+/* removed duplicate calendarWeeks constant */
+
+// Added: normalize an expense into a Date (prefers startDate -> createdAt -> _creationTime)
+function getExpenseDay(expense: any): Date {
+  const raw =
+    expense?.startDate ??
+    expense?.createdAt ??
+    expense?._creationTime ??
+    Date.now();
+  const d = new Date(raw);
+  d.setHours(0, 0, 0, 0); // normalize
+  return d;
+}
+
+// Added: fallback stats builder used by the heatmap
+function getExpenseStats(
+  expenses: Array<any> | null | undefined
+): Array<{ date: Date; count: number }> {
+  const counts = new Map<string, number>();
+  for (const e of expenses ?? []) {
+    const d = getExpenseDay(e);
+    const key = d.toISOString().slice(0, 10);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  const results: Array<{ date: Date; count: number }> = [];
+  for (const [key, count] of counts) {
+    results.push({ date: new Date(key), count });
+  }
+  return results;
+}
 
 export default function Dashboard() {
   const { isLoading, isAuthenticated, user, signOut } = useAuth();
@@ -995,7 +1043,7 @@ export default function Dashboard() {
   }
 
   // Add this helper function at the top of your file or in a utils file
-function processExpenseData(expenses: any[]): ContributionItem[] {
+function processExpenseData(expenses: any[]): Array<{ date: Date; count: number }> {
   if (!Array.isArray(expenses) || expenses.length === 0) {
     return [];
   }
@@ -2054,7 +2102,7 @@ function getExpenseTimestamp(expense: any): number | null {
                   contributions={processExpenseData(
                     filteredExpenses ?? expenses ?? []
                   )}
-                  weeks={53}
+                  weeks={calendarWeeks}
                   isLoading={isLoading}
                   className="w-full"
                 />
