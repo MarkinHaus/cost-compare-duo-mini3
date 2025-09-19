@@ -986,7 +986,7 @@ export default function Dashboard() {
     try {
       const currencyCode = newRoomCurrency ?? "USD";
       const maxMembers = newRoomMaxMembers ?? 3;
-      await createRoomImmediate({ currencyCode, maxMembers });
+      await createRoomImmediate({ currencyCode, maxMembers: Number(maxMembers) });
       toast.success("Room created with current settings");
     } catch (err: any) {
       toast.error(err?.message || "Failed to create room");
@@ -2010,7 +2010,7 @@ export default function Dashboard() {
                     max={100}
                     className="border rounded p-1 text-foreground bg-background"
                     value={newRoomMaxMembers ?? 3}
-                    onChange={(e) => setNewRoomMaxMembers(Number(e.target.value))}
+                    onChange={(e) => setNewRoomMaxMembers(e.target.value)}
                   />
                 </div>
               </div>
