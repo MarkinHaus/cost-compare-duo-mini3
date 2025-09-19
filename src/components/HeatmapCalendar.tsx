@@ -100,13 +100,13 @@ export default function ContributionsCalendar({
         const date = addDays(adjustedStartDate, week * 7 + day);
         const count = contributionMap.get(formatDate(date)) || 0;
         
+        // Use absolute buckets to match the legend (1–3, 4–6, 7–9, 10+)
         let level = 0;
         if (count > 0) {
-          const percentage = count / maxCount;
-          if (percentage >= 0.75) level = 4;
-          else if (percentage >= 0.5) level = 3;
-          else if (percentage >= 0.25) level = 2;
-          else level = 1;
+          if (count >= 10) level = 4;
+          else if (count >= 7) level = 3;
+          else if (count >= 4) level = 2;
+          else level = 1; // 1–3
         }
         
         grid[day][week] = { date, count, level };
