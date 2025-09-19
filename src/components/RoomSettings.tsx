@@ -53,7 +53,9 @@ export function RoomSettings({ userRoom, userBilling, onRoomChange }: RoomSettin
   };
 
   const handleCopyInviteLink = (code: string) => {
-    const inviteUrl = `${window.location.origin}/dashboard?invite=${code}`;
+    // Change: copy an auth-based invite link so unauthenticated users can click and be routed through Auth,
+    // which will then process the invite post-login. This also works for already-authenticated users.
+    const inviteUrl = `${window.location.origin}/auth?invite=${encodeURIComponent(code)}`;
     navigator.clipboard.writeText(inviteUrl);
     toast.success("Invite link copied to clipboard!");
   };

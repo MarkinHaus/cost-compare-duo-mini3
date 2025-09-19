@@ -168,9 +168,10 @@ export const getUserRoom = query({
 export const getByCode = query({
   args: { code: v.string() },
   handler: async (ctx, args) => {
+    const normalized = args.code.toUpperCase(); // Normalize to match storage convention
     return await ctx.db
       .query("rooms")
-      .withIndex("by_code", (q) => q.eq("code", args.code))
+      .withIndex("by_code", (q) => q.eq("code", normalized))
       .unique();
   },
 });
