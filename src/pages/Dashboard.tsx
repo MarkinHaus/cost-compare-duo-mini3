@@ -202,6 +202,7 @@ export default function Dashboard() {
   const [showCancelNow, setShowCancelNow] = useState(false);
   const cancelNowAction = useAction(api.subscriptions_actions.cancelNow);
   const cancelNowImmediate = useAction(api.subscriptions_actions.cancelNow);
+  const downgradeToFreeSimple = useMutation(api.subscriptions.downgradeToFreeSimple);
 
   // Mutation to join a room by code
   const joinRoomByCode = useMutation(api.rooms.join);
@@ -495,6 +496,28 @@ export default function Dashboard() {
       setShowTrialExpiredModal(false);
     } catch (err: any) {
       toast.error(err?.message ?? "Failed to cancel now");
+    }
+  };
+
+  // Add: helper to format remaining time from milliseconds
+  function formatRemaining(ms: number) {
+    const totalSec = Math.floor(ms / 1000);
+    const days = Math.floor(totalSec / (3600 * 24));
+    const hours = Math.floor((totalSec % (3600 * 24)) / 3600);
+    const mins = Math.floor((totalSec % 3600) / 60);
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+  }
+
+  // Add: continue as free user handler
+  const handleContinueAsFree = async () => {
+    try {
+      await downgradeToFreeSimple({});
+      toast.success("You're now on the Free plan");
+      setShowTrialExpiredModal(false);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to downgrade");
     }
   };
 
@@ -1119,6 +1142,11 @@ export default function Dashboard() {
                     Subscribe {currencySymbol}{((pricing?.planPriceCents ?? 120) / 100).toFixed(2)}/mo
                   </Button>
                 </div>
+                {userBilling?.trialActive && typeof userBilling?.remainingMs === "number" && userBilling.remainingMs > 0 && (
+                  <div className="text-sm text-muted-foreground">
+                    Trial: {formatRemaining(userBilling.remainingMs)} remaining
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -2128,6 +2156,9 @@ export default function Dashboard() {
                   Cancel Now (delete my data)
                 </Button>
               </AlertDialogAction>
+              <Button variant="secondary" onClick={handleContinueAsFree}>
+                Continue as Free
+              </Button>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>

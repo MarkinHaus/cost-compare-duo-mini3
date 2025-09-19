@@ -1,8 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import { getCurrentUser } from "./users";
-/* removed unused internal import */
-
 import type { Doc, Id } from "./_generated/dataModel";
 
 export const startTrial = mutation({
@@ -11,17 +9,45 @@ export const startTrial = mutation({
     const user = await getCurrentUser(ctx);
     if (!user) throw new Error("Not authenticated");
 
-    // If already premium, no-op
+    // prevent multiple free trials
+    if (user.trialUsed) {
+      throw new Error("Free trial already used");
+    }
+    // If already premium (stripe or active trial), no-op
     if (user.premium) {
       return;
     }
 
-    const trialEnd = Date.now() + 7 * 24 * 60 * 60 * 1000; // 7 days
+    const now = Date.now();
+    const trialStart = now;
+    const trialEnd = now + 7 * 24 * 60 * 60 * 1000; // 7 days
 
     await ctx.db.patch(user._id, {
       premium: true,
       plan: "pro",
+      trialStart,
       trialEnd,
+      billingProvider: "trial",
+    });
+  },
+});
+
+// Add: auto-start trial if eligible (to be called on login/dashboard mount)
+export const autoStartTrialIfEligible = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+    if (user.premium) return;
+    if (user.trialUsed) return;
+    if (user.billingProvider === "stripe") return;
+    if (user.trialEnd) return; // already has trial
+    const now = Date.now();
+    await ctx.db.patch(user._id, {
+      premium: true,
+      plan: "pro",
+      trialStart: now,
+      trialEnd: now + 7 * 24 * 60 * 60 * 1000,
       billingProvider: "trial",
     });
   },
@@ -35,12 +61,16 @@ export const getMe = query({
 
     const now = Date.now();
     const trialActive = user.trialEnd ? now < user.trialEnd : false;
+    const remainingMs = trialActive && user.trialEnd ? Math.max(0, user.trialEnd - now) : 0;
 
     return {
       premium: user.premium || false,
       plan: user.plan,
       trialActive,
       trialEnd: user.trialEnd,
+      trialStart: user.trialStart,
+      trialUsed: user.trialUsed ?? false,
+      remainingMs,
     };
   },
 });
@@ -170,6 +200,8 @@ export const downgradeToFreeAndPrune = mutation({
       billingProvider: "trial", // keep provenance
       plan: undefined,
       cancelAtPeriodEnd: false,
+      trialEnd: undefined,
+      trialUsed: true,
     });
 
     return { ok: true };
@@ -247,8 +279,8 @@ export const downgradeNowAuto = mutation({
       premium: false,
       plan: null as any,
       cancelAtPeriodEnd: false,
-      // Keep billingProvider/billing ids as-is for audit; trialEnd cleared
       trialEnd: undefined,
+      trialUsed: true,
     });
 
     // Simple audit log to Convex logs
@@ -260,6 +292,27 @@ export const downgradeNowAuto = mutation({
     });
 
     return { deletedRooms, deletedExpenses, roomsLeft };
+  },
+});
+
+// NEW: simple non-destructive downgrade (continue as free user)
+export const downgradeToFreeSimple = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const user = await getCurrentUser(ctx);
+    if (!user) throw new Error("Not authenticated");
+
+    // Just remove premium flags, mark trial used, keep rooms intact (limits enforced elsewhere)
+    await ctx.db.patch(user._id, {
+      premium: false,
+      plan: undefined,
+      billingProvider: user.billingProvider ?? "trial",
+      cancelAtPeriodEnd: false,
+      trialEnd: undefined,
+      trialUsed: true,
+    });
+
+    return { ok: true };
   },
 });
 

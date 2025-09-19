@@ -17,7 +17,9 @@ export const create = mutation({
       const trialActive = !!user.trialEnd && now < user.trialEnd!;
       if (!trialActive) {
         if (user.premium) {
-          await ctx.db.patch(user._id, { premium: false });
+          await ctx.db.patch(user._id, { premium: false, trialEnd: undefined, trialUsed: true });
+        } else {
+          await ctx.db.patch(user._id, { trialEnd: undefined, trialUsed: true });
         }
         isPremium = false;
       } else {
@@ -25,12 +27,13 @@ export const create = mutation({
       }
     }
 
-    // Auto-start trial if user has no plan set yet (limited premium)
-    if (!user.premium && !user.trialEnd && user.billingProvider !== "stripe") {
+    // Auto-start trial if user has no plan set yet (limited premium) and hasn't used it
+    if (!user.premium && !user.trialEnd && user.billingProvider !== "stripe" && !user.trialUsed) {
       const trialEnd = now + 7 * 24 * 60 * 60 * 1000;
       await ctx.db.patch(user._id, {
         premium: true,
         plan: "pro",
+        trialStart: now,
         trialEnd,
         billingProvider: "trial",
       });
@@ -95,7 +98,9 @@ export const join = mutation({
       const trialActive = !!user.trialEnd && now < user.trialEnd!;
       if (!trialActive) {
         if (user.premium) {
-          await ctx.db.patch(user._id, { premium: false });
+          await ctx.db.patch(user._id, { premium: false, trialEnd: undefined, trialUsed: true });
+        } else {
+          await ctx.db.patch(user._id, { trialEnd: undefined, trialUsed: true });
         }
         isPremium = false;
       } else {
@@ -103,12 +108,13 @@ export const join = mutation({
       }
     }
 
-    // Auto-start trial if user has no plan set yet (limited premium)
-    if (!user.premium && !user.trialEnd && user.billingProvider !== "stripe") {
+    // Auto-start trial if user has no plan set yet (limited premium) and hasn't used it
+    if (!user.premium && !user.trialEnd && user.billingProvider !== "stripe" && !user.trialUsed) {
       const trialEnd = now + 7 * 24 * 60 * 60 * 1000;
       await ctx.db.patch(user._id, {
         premium: true,
         plan: "pro",
+        trialStart: now,
         trialEnd,
         billingProvider: "trial",
       });
