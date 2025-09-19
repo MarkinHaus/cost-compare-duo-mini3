@@ -1974,7 +1974,7 @@ export default function Dashboard() {
 
             {/* Manage Rooms - Current Configuration and Quick Create */}
             <div className="mt-4 rounded-lg border p-4 bg-card">
-              <h4 className="font-semibold mb-2">Current Room Settings</h4>
+              <h4 className="font-semibold mb-2">Create New Room</h4>
               <div className="text-sm text-muted-foreground space-y-3">
                 {/* Currency */}
                 <div className="flex flex-col">
