@@ -1046,65 +1046,7 @@ export default function Dashboard() {
           </Card>
         ) : (
           <>
-            {/* Room Info */}
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <Users className="h-4 w-4" />
-                      <span className="font-medium">Room Code:</span>
-                      <Badge variant="secondary" className="font-mono text-lg">
-                        {userRoom.code}
-                      </Badge>
-                    </div>
-                    <Button variant="ghost" size="sm" onClick={copyRoomCode}>
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-sm text-muted-foreground">
-                      {userRoom.members.length} member{userRoom.members.length !== 1 ? 's' : ''}
-                    </div>
-                    {userBilling && (
-                      <Badge variant={userBilling.premium ? "default" : "outline"}>
-                        {userBilling.premium ? "Premium" : "Free"}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Subscription Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Subscription</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-wrap gap-4 items-center">
-                  {!userBilling?.premium && (
-                    <Button onClick={handleStartTrial} variant="outline">
-                      Start 7-day free trial
-                    </Button>
-                  )}
-                  <Button onClick={handleSubscribe}>
-                    Subscribe {currencySymbol}{((pricing?.planPriceCents ?? 120) / 100).toFixed(2)}/mo
-                  </Button>
-                  {userBilling?.premium && (
-                    <Button variant="destructive" onClick={handleCancelAtPeriodEnd}>
-                      Cancel at end of period
-                    </Button>
-                  )}
-                </div>
-                {userBilling?.trialActive && (
-                  <p className="text-sm text-muted-foreground">
-                    Trial ends: {new Date(userBilling.trialEnd!).toLocaleDateString()}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-
+          
             {/* Search & Scope */}
             <Card className="mt-6">
               <CardHeader>
@@ -1906,6 +1848,64 @@ export default function Dashboard() {
                       </PieChart>
                     )}
                   </ChartContainer>
+                )}
+              </CardContent>
+            </Card>
+             {/* Room Info */}
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                      <Users className="h-4 w-4" />
+                      <span className="font-medium">Room Code:</span>
+                      <Badge variant="secondary" className="font-mono text-lg">
+                        {userRoom.code}
+                      </Badge>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={copyRoomCode}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-sm text-muted-foreground">
+                      {userRoom.members.length} member{userRoom.members.length !== 1 ? 's' : ''}
+                    </div>
+                    {userBilling && (
+                      <Badge variant={userBilling.premium ? "default" : "outline"}>
+                        {userBilling.premium ? "Premium" : "Free"}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Subscription Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Subscription</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-4 items-center">
+                  {!userBilling?.premium && (
+                    <Button onClick={handleStartTrial} variant="outline">
+                      Start 7-day free trial
+                    </Button>
+                  )}
+                  <Button onClick={handleSubscribe}>
+                    Subscribe {currencySymbol}{((pricing?.planPriceCents ?? 120) / 100).toFixed(2)}/mo
+                  </Button>
+                  {userBilling?.premium && (
+                    <Button variant="destructive" onClick={handleCancelAtPeriodEnd}>
+                      Cancel at end of period
+                    </Button>
+                  )}
+                </div>
+                {userBilling?.trialActive && (
+                  <p className="text-sm text-muted-foreground">
+                    Trial ends: {new Date(userBilling.trialEnd!).toLocaleDateString()}
+                  </p>
                 )}
               </CardContent>
             </Card>
