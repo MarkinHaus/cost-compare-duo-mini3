@@ -41,7 +41,8 @@ const COLOR_CLASSES = [
   "bg-emerald-400",
 ];
 
-export default function HeatmapCalendar({ items, weeks = 12, title = "Activity", className }: HeatmapCalendarProps) {
+// Update default weeks to 52 for "last year" view and keep className support
+export default function HeatmapCalendar({ items, weeks = 52, title = "Activity", className }: HeatmapCalendarProps) {
 
   // Build a map of counts per day (YYYY-MM-DD)
   const counts = React.useMemo(() => {
@@ -113,8 +114,8 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity",
     <div className={cn("w-full", className)}>
       <div className="text-sm font-medium">{title}</div>
 
-      {/* Month labels row */}
-      <div className="mt-2 mb-1 grid grid-flow-col auto-cols-[minmax(12px,1fr)] grid-rows-1 w-full text-xs text-muted-foreground">
+      {/* Month labels row (fixed column width like GitHub) */}
+      <div className="mt-2 mb-1 grid grid-flow-col auto-cols-[12px] grid-rows-1 w-full text-xs text-muted-foreground">
         {weekStartDates.map((d, i) => {
           const prev = i > 0 ? weekStartDates[i - 1] : null;
           const show = i === 0 || (prev && d.getMonth() !== prev.getMonth());
@@ -126,7 +127,7 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity",
 
       {/* Grid with left weekday labels + heatmap cells */}
       <div className="w-full flex gap-2">
-        {/* Left weekday labels (hidden on very small screens) */}
+        {/* Left weekday labels (Mon, Wed, Fri) */}
         <div className="hidden sm:flex sm:flex-col sm:justify-between text-xs text-muted-foreground">
           {Array.from({ length: 7 }).map((_, rowIdx) => (
             <div key={rowIdx} className="h-full flex items-start">
@@ -137,11 +138,11 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity",
           ))}
         </div>
 
-        {/* Heatmap grid */}
+        {/* Heatmap grid - small fixed-size squares like GitHub */}
         <div className="w-full">
-          <div className="grid grid-flow-col auto-cols-[minmax(12px,1fr)] grid-rows-7 gap-1 w-full">
+          <div className="grid grid-flow-col auto-cols-[12px] grid-rows-7 gap-[3px] w-full">
             {Array.from({ length: weeks }).map((_, colIdx) => (
-              <div key={colIdx} className="flex flex-col gap-1">
+              <div key={colIdx} className="flex flex-col gap-[3px]">
                 {Array.from({ length: 7 }).map((_, rowIdx) => {
                   const cell = grid[rowIdx]?.[colIdx];
                   const title = cell
@@ -151,9 +152,9 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity",
                     <div
                       key={`${rowIdx}-${colIdx}`}
                       className={cn(
-                        "w-full aspect-square rounded-[3px] border",
+                        "w-[10px] h-[10px] rounded-[2px] border",
                         cell ? colorFor(cell.count) : COLOR_CLASSES[0],
-                        "border-border/50 transition-colors"
+                        "border-border/40 transition-colors"
                       )}
                       title={title}
                     />
@@ -165,12 +166,12 @@ export default function HeatmapCalendar({ items, weeks = 12, title = "Activity",
         </div>
       </div>
 
-      {/* Legend */}
+      {/* Legend - compact squares */}
       <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
         <span>Less</span>
         <div className="flex items-center gap-1">
           {COLOR_CLASSES.slice(0, 5).map((c, i) => (
-            <div key={i} className={cn("h-3 w-3 rounded-[3px] border border-border/50", c)} />
+            <div key={i} className={cn("h-[10px] w-[10px] rounded-[2px] border border-border/50", c)} />
           ))}
         </div>
         <span>More</span>
