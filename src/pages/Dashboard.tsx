@@ -2235,6 +2235,27 @@ export default function Dashboard() {
             Terms & Privacy
           </Button>
         </div>
+
+        {/* Add: Bottom subscription card for free users */}
+        {!userBilling?.premium && (
+          <div className="fixed bottom-4 left-4 right-4 z-50 print:hidden">
+            <div className="mx-auto max-w-3xl">
+              <Card className="shadow-lg border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/75">
+                <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4">
+                  <div className="space-y-1">
+                    <div className="font-semibold">Upgrade to Premium</div>
+                    <div className="text-sm text-muted-foreground">
+                      • Unlimited rooms • Larger member limits • Enhanced charts & PDF • Priority support
+                    </div>
+                  </div>
+                  <Button onClick={handleSubscribe} className="whitespace-nowrap">
+                    Subscribe {currencySymbol}{(((pricing?.planPriceCents ?? 120) / 100)).toFixed(2)}/mo
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Add: Print-only report layout */}
