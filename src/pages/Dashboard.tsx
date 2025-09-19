@@ -57,6 +57,7 @@ export default function Dashboard() {
   // Cookie & Legal modals state
   const [showCookieModal, setShowCookieModal] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+  const [showTrialExpiredModal, setShowTrialExpiredModal] = useState(false);
 
   // Initialize cookie & terms visibility from localStorage
   useEffect(() => {
@@ -200,6 +201,7 @@ export default function Dashboard() {
   const pricing = useQuery(api.subscriptions.getPricing);
   const [showCancelNow, setShowCancelNow] = useState(false);
   const cancelNowAction = useAction(api.subscriptions_actions.cancelNow);
+  const cancelNowImmediate = useAction(api.subscriptions_actions.cancelNow);
 
   // Mutation to join a room by code
   const joinRoomByCode = useMutation(api.rooms.join);
@@ -291,6 +293,18 @@ export default function Dashboard() {
       setSelectedBeneficiaries(userRoom.members.map((m: any) => m));
     }
   }, [userRoom, showAddExpense]);
+
+  // Trigger modal when the free trial has ended and the user is not premium
+  useEffect(() => {
+    const ended =
+      !!userBilling?.trialEnd &&
+      Date.now() >= (userBilling?.trialEnd ?? 0) &&
+      !userBilling?.premium;
+
+    if (ended) {
+      setShowTrialExpiredModal(true);
+    }
+  }, [userBilling?.trialEnd, userBilling?.premium]);
 
   if (isLoading) {
     return (
@@ -470,6 +484,17 @@ export default function Dashboard() {
       toast.success("Subscription will be canceled at the end of the current period");
     } catch (e) {
       toast.error("Failed to schedule cancellation");
+    }
+  };
+
+  // Handler for immediate cancel now from the trial-ended prompt
+  const handleTrialCancelNow = async () => {
+    try {
+      await cancelNowImmediate({});
+      toast.success("Premium canceled and data pruned. You're now on Free.");
+      setShowTrialExpiredModal(false);
+    } catch (err: any) {
+      toast.error(err?.message ?? "Failed to cancel now");
     }
   };
 
@@ -2079,6 +2104,33 @@ export default function Dashboard() {
             </div>
           </div>
         ) : null}
+
+        {/* Trial Ended Prompt */}
+        <AlertDialog open={showTrialExpiredModal} onOpenChange={setShowTrialExpiredModal}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Your free trial has ended</AlertDialogTitle>
+              <AlertDialogDescription>
+                To keep premium features (unlimited rooms, higher member limits, etc.), please subscribe.
+                If you choose not to subscribe, you can Cancel Now which will immediately revoke premium
+                access and delete all rooms you own and their expenses, and remove you from any other rooms.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setShowTrialExpiredModal(false)}>
+                Decide Later
+              </AlertDialogCancel>
+              <Button variant="default" onClick={() => { setShowTrialExpiredModal(false); handleSubscribe(); }}>
+                Subscribe
+              </Button>
+              <AlertDialogAction asChild>
+                <Button variant="destructive" onClick={handleTrialCancelNow}>
+                  Cancel Now (delete my data)
+                </Button>
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={showCancelNow} onOpenChange={setShowCancelNow}>
           <AlertDialogContent>
