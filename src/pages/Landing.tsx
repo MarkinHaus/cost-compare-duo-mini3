@@ -132,7 +132,7 @@ export default function Landing() {
       </section>
 
       {/* Features */}
-      <section className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-12 sm:py-16">
+      <section className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-12 sm:py-16 mt-10 sm:mt-12">
         <h2 className="text-2xl sm:text-3xl font-semibold">
           Everything you need, nothing you don't
         </h2>
@@ -259,11 +259,11 @@ export default function Landing() {
           <div className="rounded-xl border p-6 flex flex-col">
             <div className="mb-1 text-sm font-medium text-primary/80">Free</div>
             <h3 className="text-xl font-semibold">Everything to get started</h3>
-            <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-              <li>• 1 room, up to 3 members</li>
-              <li>• Add/edit/delete expenses</li>
-              <li>• Bar or Pie (basic) & PDF export</li>
-              <li>• Invite by code or link</li>
+            <ul className="mt-4 space-y-2 text-sm text-muted-foreground list-disc pl-5">
+              <li>1 room, up to 3 members</li>
+              <li>Add/edit/delete expenses</li>
+              <li>Bar or Pie (basic) & PDF export</li>
+              <li>Invite by code or link</li>
             </ul>
             <div className="mt-6">
               <Button
@@ -285,11 +285,11 @@ export default function Landing() {
             </div>
             <div className="mb-1 text-sm font-medium text-primary/80">Pro</div>
             <h3 className="text-xl font-semibold">All features, no limits</h3>
-            <ul className="mt-4 space-y-2 text-sm text-muted-foreground">
-              <li>• Unlimited rooms & members</li>
-              <li>• Tag comparison (Bar/Pie) with legends</li>
-              <li>• GitHub‑style heatmap calendar</li>
-              <li>• Advanced recurring + premium reports</li>
+            <ul className="mt-4 space-y-2 text-sm text-muted-foreground list-disc pl-5">
+              <li>Unlimited rooms & members</li>
+              <li>Tag comparison (Bar/Pie) with legends</li>
+              <li>GitHub‑style heatmap calendar</li>
+              <li>Advanced recurring + premium reports</li>
             </ul>
             <p className="mt-2 text-xs text-muted-foreground">
               Includes a 7‑day trial (one per account). Cancel anytime.
