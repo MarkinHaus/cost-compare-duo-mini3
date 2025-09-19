@@ -22,6 +22,7 @@ import { ChartContainer, ChartTooltipContent, ChartLegendContent } from "@/compo
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Tooltip as RechartsTooltip, Legend as RechartsLegend, PieChart, Pie, Cell } from "recharts";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { RoomSettings } from "@/components/RoomSettings";
+import HeatmapCalendar from "@/components/HeatmapCalendar";
 /* removed duplicate useMutation import */
 
 export default function Dashboard() {
@@ -1972,7 +1973,26 @@ export default function Dashboard() {
               </CardContent>
             </Card>
 
-            
+            {/* GitHub-style Heatmap Calendar (Daily expense counts) */}
+            <div className="bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm print:hidden">
+              <div className="px-6">
+                <HeatmapCalendar
+                  // Prefer the filtered list if present; fallback to full list if available
+                  items={((typeof filteredExpenses !== "undefined" && filteredExpenses) ? filteredExpenses : (typeof expenses !== "undefined" ? expenses : []))
+                    .map((e: any) => {
+                      // Choose a best-available timestamp to represent when the expense occurred/tracked.
+                      // Try startDate (for recurring start), then createdAt, then _creationTime.
+                      const ts: number | undefined =
+                        (typeof e?.startDate === "number" ? e.startDate : undefined) ??
+                        (typeof e?.createdAt === "number" ? e.createdAt : undefined) ??
+                        (typeof e?._creationTime === "number" ? e._creationTime : undefined);
+                      return { date: ts ?? Date.now() };
+                    })}
+                  title="Daily activity (expenses per day)"
+                  weeks={12}
+                />
+              </div>
+            </div>
 
           </>
         )}
