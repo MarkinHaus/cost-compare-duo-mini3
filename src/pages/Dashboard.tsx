@@ -1512,31 +1512,8 @@ function getExpenseTimestamp(expense: any): number | null {
             </div>
 
             {/* Add Expense and Controls */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <Label htmlFor="sort">Sort by:</Label>
-                <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="date">Date</SelectItem>
-                    <SelectItem value="amount">Amount</SelectItem>
-                    <SelectItem value="name">Name</SelectItem>
-                  </SelectContent>
-                </Select>
-                {/* Add: Chart type selector */}
-                <Label htmlFor="chart-type" className="ml-2">Chart:</Label>
-                <Select value={chartType} onValueChange={(v) => setChartType(v as "bar" | "pie")}>
-                  <SelectTrigger id="chart-type" className="w-28">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bar">Bar</SelectItem>
-                    <SelectItem value="pie">Pie</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex justify-between items-center overflow-y-auto">
+              
 
               <Dialog open={showAddExpense} onOpenChange={setShowAddExpense}>
                 <DialogTrigger asChild>
@@ -1924,6 +1901,36 @@ function getExpenseTimestamp(expense: any): number | null {
                   </div>
                 </DialogContent>
               </Dialog>
+
+              <div className="flex items-center gap-4">
+                <hr/>
+                <Label htmlFor="sort">Sort by:</Label>
+                <Select value={sortBy} onValueChange={setSortBy}>
+                  <SelectTrigger className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="date">Date</SelectItem>
+                    <SelectItem value="amount">Amount</SelectItem>
+                    <SelectItem value="name">Name</SelectItem>
+                  </SelectContent>
+                </Select>
+                {/* Add: Chart type selector */}
+                <Label htmlFor="chart-type" className="ml-2">Chart:</Label>
+                <Select
+  value={chartType === "pie" ? "pie(pdf)" : chartType}
+  onValueChange={(v) => setChartType(v === "pie(pdf)" ? "pie" : (v as "bar" | "pie"))}
+>
+                  <SelectTrigger id="chart-type" className="w-28">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bar">Bar</SelectItem>
+                    <SelectItem value="pie">Pie</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
             </div>
 
             {/* Expenses List */}
@@ -2029,6 +2036,27 @@ function getExpenseTimestamp(expense: any): number | null {
               </CardContent>
             </Card>
 
+            {/* GitHub-style Heatmap Calendar (Daily expense counts) */}
+            <div className="bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm print:hidden overflow-y-auto">
+              <div className="px-6">
+                <ContributionsCalendar
+                  contributions={processExpenseData(
+                    filteredExpenses ?? expenses ?? []
+                  )}
+                  weeks={calendarWeeks}
+                  isLoading={isLoading}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+          </>
+        )}
+
+        {/* Premium-only Room Management Panel at bottom */}
+        {userBilling?.premium && (
+          <>
+          
             {/* Tag Comparison Chart */}
             <Card>
               <CardHeader>
@@ -2087,34 +2115,7 @@ function getExpenseTimestamp(expense: any): number | null {
                 )}
               </CardContent>
             </Card>
-
-            {/* GitHub-style Heatmap Calendar (Daily expense counts) */}
-            <div className="bg-card text-card-foreground flex flex-col gap-6 rounded-xl border py-6 shadow-sm print:hidden">
-              <div className="px-6">
-                <div className="mb-4">
-                  <h3 className="text-lg font-semibold">Expense Activity</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Daily expense tracking over the past year
-                  </p>
-                </div>
-                
-                <ContributionsCalendar
-                  contributions={processExpenseData(
-                    filteredExpenses ?? expenses ?? []
-                  )}
-                  weeks={calendarWeeks}
-                  isLoading={isLoading}
-                  className="w-full"
-                />
-              </div>
-            </div>
-
-          </>
-        )}
-
-        {/* Premium-only Room Management Panel at bottom */}
-        {userBilling?.premium && (
-          <>
+            
           {/* Manage Rooms - Current Configuration and Quick Create */}
             <div className="mt-4 rounded-lg border p-4 bg-card">
               <h4 className="font-semibold mb-2">Create New Room</h4>
@@ -2479,7 +2480,7 @@ function getExpenseTimestamp(expense: any): number | null {
                   <div className="space-y-1">
                     <div className="font-semibold">Upgrade to Premium</div>
                     <div className="text-sm text-muted-foreground">
-                      • Unlimited rooms • Larger member limits • Enhanced charts & PDF • Priority support
+                      • Unlimited rooms • Larger member limits • Enhanced charts & Year View • Priority support
                     </div>
                   </div>
                   <Button onClick={handleSubscribe} className="whitespace-nowrap">
