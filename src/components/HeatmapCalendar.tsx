@@ -156,7 +156,7 @@ export default function ContributionsCalendar({
   };
 
   return (
-    <div className={cn("select-none", className)}>
+    <div className={cn("select-none overflow-y-auto", className)}>
       <div className="overflow-x-auto">
         <div className="flex flex-col gap-1 min-w-max">
           {/* Month Labels */}
